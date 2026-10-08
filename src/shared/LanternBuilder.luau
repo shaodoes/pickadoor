@@ -130,6 +130,11 @@ function LanternBuilder.buildTool(id: string?): Tool
 	-- Grip point is the ring, measured from the Handle's centre; no rotation, so it hangs upright below the hand.
 	tool.Grip = CFrame.new(0, RING_Y - 0.11 * K, 0)
 	tool:SetAttribute("LanternId", model:GetAttribute("LanternId"))
+	-- held right next to the avatar, so soften it or the character blows out
+	local light = model:FindFirstChild("Light", true)
+	if light then
+		light.Brightness *= 0.6
+	end
 	for _, child in model:GetChildren() do
 		child.Parent = tool
 	end

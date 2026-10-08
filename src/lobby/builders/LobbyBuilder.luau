@@ -1374,13 +1374,69 @@ end
 -- Door wall: six mismatched doors that shouldn't be in a basement
 ------------------------------------------------------------------------------------------
 local DOOR_STYLES = {
-	{ color = Color3.fromRGB(64, 40, 28), material = Enum.Material.Wood, panels = true }, -- old panel door
-	{ color = Color3.fromRGB(110, 112, 110), material = Enum.Material.Metal, bar = true }, -- steel utility door
-	{ color = Color3.fromRGB(70, 96, 72), material = Enum.Material.WoodPlanks, panels = true }, -- faded green
-	{ color = Color3.fromRGB(70, 82, 104), material = Enum.Material.WoodPlanks, panels = true }, -- faded blue
-	{ color = Color3.fromRGB(120, 116, 104), material = Enum.Material.Metal, bar = true },
-	{ color = Color3.fromRGB(110, 40, 32), material = Enum.Material.Wood, panels = true }, -- red
+	-- `leak` is the light that seeps from under each door; every door is different
+	{
+		color = Color3.fromRGB(64, 40, 28),
+		material = Enum.Material.Wood,
+		panels = true,
+		leak = Color3.fromRGB(255, 170, 90),
+	}, -- old panel door
+	{
+		color = Color3.fromRGB(110, 112, 110),
+		material = Enum.Material.Metal,
+		bar = true,
+		leak = Color3.fromRGB(120, 220, 210),
+	}, -- steel utility door
+	{
+		color = Color3.fromRGB(70, 96, 72),
+		material = Enum.Material.WoodPlanks,
+		panels = true,
+		leak = Color3.fromRGB(170, 230, 110),
+	}, -- faded green
+	{
+		color = Color3.fromRGB(70, 82, 104),
+		material = Enum.Material.WoodPlanks,
+		panels = true,
+		leak = Color3.fromRGB(215, 225, 255),
+	}, -- faded blue
+	{
+		color = Color3.fromRGB(120, 116, 104),
+		material = Enum.Material.Metal,
+		bar = true,
+		leak = Color3.fromRGB(175, 120, 255),
+	},
+	{
+		color = Color3.fromRGB(110, 40, 32),
+		material = Enum.Material.Wood,
+		panels = true,
+		leak = Color3.fromRGB(255, 60, 50),
+	}, -- red
 }
+
+local SMOKE_TEXTURE = "rbxasset://textures/particles/smoke_main.dds"
+
+-- A few red paint runs down the wall below some lettering (thin parts flush with the block).
+local function paintDrips(parent: Instance, xCenter: number, width: number, yTop: number, wallZ: number, count: number)
+	for _ = 1, count do
+		local len = rng:NextNumber(0.4, 1.6)
+		local dx = rng:NextNumber(-width / 2, width / 2)
+		box(
+			parent,
+			"PaintDrip",
+			Vector3.new(rng:NextNumber(0.06, 0.12), len, 0.02),
+			Vector3.new(xCenter + dx, yTop - len / 2, wallZ + 0.02),
+			C.redPaint,
+			Enum.Material.SmoothPlastic,
+			{
+				Transparency = 0.15,
+				CanCollide = false,
+				CanQuery = false,
+				CanTouch = false,
+				CastShadow = false,
+			}
+		)
+	end
+end
 
 local function buildPad(parent: Instance, queue: Instance, wing: string, mode: string, x: number, style)
 	local spec = Config.Modes[mode]
@@ -1389,9 +1445,10 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 	pad:SetAttribute("Capacity", spec.capacity)
 	pad:SetAttribute("Count", 0)
 	pad:SetAttribute("TimeLeft", 0)
+	pad:SetAttribute("Launching", false)
 	local wallZ = -HALF_Z
 
-	-- door set into the block wall
+	-- frame set into the block wall
 	for _, s in { -1, 1 } do
 		box(
 			pad,
@@ -1403,11 +1460,47 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 		)
 	end
 	box(pad, "Header", Vector3.new(6.4, 0.6, 0.8), Vector3.new(x, 9.3, wallZ + 0.4), C.wood, Enum.Material.Wood)
-	box(pad, "Door", Vector3.new(5.2, 9, 0.3), Vector3.new(x, 4.5, wallZ + 0.15), style.color, style.material)
+
+	-- what's behind the door: nothing, and a light that shouldn't be there
+	box(
+		pad,
+		"Void",
+		Vector3.new(5.2, 9, 0.05),
+		Vector3.new(x, 4.5, wallZ + 0.02),
+		Color3.fromRGB(4, 4, 6),
+		Enum.Material.SmoothPlastic,
+		DETAIL
+	)
+	local seam = box(
+		pad,
+		"UnderGlow",
+		Vector3.new(5, 0.16, 0.06),
+		Vector3.new(x, 0.08, wallZ + 0.06),
+		style.leak,
+		Enum.Material.Neon,
+		DETAIL
+	)
+	local leak = pointLight(seam, 9, 0.6, false, style.leak)
+	leak.Name = "Leak"
+	local spill = box(
+		pad,
+		"FloorSpill",
+		Vector3.new(4.8, 0.02, 1.4),
+		Vector3.new(x, 0.02, wallZ + 1),
+		style.leak,
+		Enum.Material.Neon,
+		DETAIL
+	)
+	spill.Transparency = 0.85
+
+	-- the door leaf hangs on its left hinge, lifted a little so light shows underneath;
+	-- the client swings and rattles it as Leaf:PivotTo(hinge * rotation)
+	local leaf = folder(pad, "Leaf")
+	box(leaf, "Door", Vector3.new(5.2, 8.8, 0.3), Vector3.new(x, 4.6, wallZ + 0.15), style.color, style.material)
 	if style.panels then
-		for _, dy in { 2.4, 6.6 } do
+		for _, dy in { 2.5, 6.7 } do
 			box(
-				pad,
+				leaf,
 				"DoorPanel",
 				Vector3.new(3.8, 3, 0.12),
 				Vector3.new(x, dy, wallZ + 0.36),
@@ -1417,7 +1510,7 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 			)
 		end
 		box(
-			pad,
+			leaf,
 			"Knob",
 			Vector3.new(0.35, 0.35, 0.35),
 			Vector3.new(x + 2, 4.4, wallZ + 0.45),
@@ -1428,7 +1521,7 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 	end
 	if style.bar then
 		box(
-			pad,
+			leaf,
 			"PushBar",
 			Vector3.new(3.8, 0.3, 0.3),
 			Vector3.new(x, 4.2, wallZ + 0.45),
@@ -1437,7 +1530,7 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 			DETAIL
 		)
 		box(
-			pad,
+			leaf,
 			"WireWindow",
 			Vector3.new(1.2, 1.8, 0.1),
 			Vector3.new(x, 6.8, wallZ + 0.33),
@@ -1446,6 +1539,9 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 			DETAIL
 		)
 	end
+	leaf.WorldPivot = CFrame.new(x - 2.6, 4.6, wallZ + 0.15)
+	leaf:SetAttribute("Hinge", leaf.WorldPivot)
+
 	box(
 		pad,
 		"Threshold",
@@ -1455,6 +1551,32 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 		Enum.Material.Metal,
 		DETAIL
 	)
+
+	-- low fog seeping out from under the door, tinted by its light
+	local fogSource =
+		box(pad, "Fog", Vector3.new(4.6, 0.2, 0.2), Vector3.new(x, 0.15, wallZ + 0.5), C.block, nil, INVISIBLE)
+	local fog = Instance.new("ParticleEmitter")
+	fog.Name = "Fog"
+	fog.Texture = SMOKE_TEXTURE
+	fog.EmissionDirection = Enum.NormalId.Back -- +Z, into the room
+	fog.Rate = 2
+	fog.Lifetime = NumberRange.new(3, 5)
+	fog.Speed = NumberRange.new(0.4, 1)
+	fog.SpreadAngle = Vector2.new(35, 5)
+	fog.Acceleration = Vector3.new(0, -0.05, 0)
+	fog.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 3) })
+	fog.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.2, 0.86),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	fog.Color = ColorSequence.new(style.leak:Lerp(Color3.new(1, 1, 1), 0.5))
+	fog.LightEmission = 0.25
+	fog.LightInfluence = 0.6
+	fog.RotSpeed = NumberRange.new(-10, 10)
+	fog.Rotation = NumberRange.new(0, 360)
+	fog.Parent = fogSource
+
 	local light =
 		cagedLight(queue, CFrame.new(x + 3.9, 8.6, wallZ + 0.15) * CFrame.Angles(math.rad(-20), 0, 0), 14, 1.1)
 	light.Name = "DoorLight"
@@ -1521,6 +1643,93 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 	return pad
 end
 
+local function buildClock(queue: Instance, center: Vector3)
+	local clock = folder(queue, "Clock")
+	local wallZ = center.Z
+	local facing = CFrame.Angles(0, math.rad(90), 0) -- cylinder axis X -> Z, so its round face points into the room
+	box(
+		clock,
+		"Rim",
+		Vector3.new(0.25, 3.4, 3.4),
+		CFrame.new(center + Vector3.new(0, 0, 0.12)) * facing,
+		C.darkWood,
+		Enum.Material.Wood,
+		{ Shape = Enum.PartType.Cylinder, CanCollide = false }
+	)
+	local face = box(
+		clock,
+		"Face",
+		Vector3.new(0.3, 3, 3),
+		CFrame.new(center + Vector3.new(0, 0, 0.2)) * facing,
+		Color3.fromRGB(226, 216, 196),
+		Enum.Material.SmoothPlastic,
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+		}
+	)
+	local glow = pointLight(face, 6, 0.35, false, Color3.fromRGB(255, 230, 190))
+	glow.Name = "Glow"
+	-- hour ticks
+	for h = 0, 11 do
+		local a = h / 12 * math.pi * 2
+		local len = h % 3 == 0 and 0.32 or 0.18
+		box(
+			clock,
+			"Tick",
+			Vector3.new(0.06, len, 0.02),
+			CFrame.new(center + Vector3.new(math.sin(a) * 1.25, math.cos(a) * 1.25, 0.37)) * CFrame.Angles(0, 0, -a),
+			Color3.fromRGB(30, 26, 22),
+			nil,
+			DETAIL
+		)
+	end
+	-- hands are positioned by the client every frame; these are just their resting poses
+	local function hand(name, size, color, z, angle)
+		local part = box(
+			clock,
+			name,
+			size,
+			CFrame.new(center + Vector3.new(0, 0, z)) * CFrame.Angles(0, 0, -angle) * CFrame.new(0, size.Y * 0.4, 0),
+			color,
+			nil,
+			DETAIL
+		)
+		part:SetAttribute("Length", size.Y)
+		part:SetAttribute("Depth", z)
+		return part
+	end
+	hand("HandHour", Vector3.new(0.12, 0.8, 0.04), Color3.fromRGB(20, 20, 20), 0.39, math.rad(20))
+	hand("HandMinute", Vector3.new(0.08, 1.2, 0.04), Color3.fromRGB(20, 20, 20), 0.42, math.rad(300))
+	hand("HandSecond", Vector3.new(0.04, 1.3, 0.03), C.redPaint, 0.45, 0)
+	box(
+		clock,
+		"Pin",
+		Vector3.new(0.18, 0.18, 0.18),
+		center + Vector3.new(0, 0, 0.47),
+		C.brass,
+		Enum.Material.Metal,
+		{ Shape = Enum.PartType.Ball, CanCollide = false, CastShadow = false }
+	)
+	box(
+		clock,
+		"Glass",
+		Vector3.new(0.05, 3, 3),
+		CFrame.new(center + Vector3.new(0, 0, 0.5)) * facing,
+		Color3.fromRGB(220, 230, 230),
+		Enum.Material.Glass,
+		{
+			Shape = Enum.PartType.Cylinder,
+			Transparency = 0.85,
+			CanCollide = false,
+			CastShadow = false,
+		}
+	)
+	clock:SetAttribute("Center", center)
+	local _ = wallZ
+	return clock
+end
+
 local function buildDoorWall(root: Instance)
 	local queue = folder(root, "Queue")
 	local pads = Instance.new("Folder")
@@ -1537,49 +1746,8 @@ local function buildDoorWall(root: Instance)
 	end
 
 	local wallZ = -HALF_Z
-	-- wall clock that has stopped, over an old cast-iron radiator
-	box(
-		queue,
-		"ClockFace",
-		Vector3.new(0.3, 3, 3),
-		CFrame.new(0, 8, wallZ + 0.2) * CFrame.Angles(0, math.rad(90), 0),
-		Color3.fromRGB(226, 216, 196),
-		Enum.Material.SmoothPlastic,
-		{
-			Shape = Enum.PartType.Cylinder,
-			CanCollide = false,
-		}
-	)
-	box(
-		queue,
-		"ClockRim",
-		Vector3.new(0.25, 3.4, 3.4),
-		CFrame.new(0, 8, wallZ + 0.12) * CFrame.Angles(0, math.rad(90), 0),
-		C.darkWood,
-		Enum.Material.Wood,
-		{
-			Shape = Enum.PartType.Cylinder,
-			CanCollide = false,
-		}
-	)
-	box(
-		queue,
-		"HandHour",
-		Vector3.new(0.12, 0.8, 0.05),
-		CFrame.new(0.15, 8.3, wallZ + 0.4) * CFrame.Angles(0, 0, math.rad(-20)),
-		Color3.fromRGB(20, 20, 20),
-		nil,
-		DETAIL
-	)
-	box(
-		queue,
-		"HandMinute",
-		Vector3.new(0.08, 1.2, 0.05),
-		CFrame.new(-0.3, 8.2, wallZ + 0.4) * CFrame.Angles(0, 0, math.rad(60)),
-		Color3.fromRGB(20, 20, 20),
-		nil,
-		DETAIL
-	)
+	-- wall clock that has stopped (mostly), over an old cast-iron radiator
+	buildClock(queue, Vector3.new(0, 8, wallZ))
 	for i = -4, 4 do
 		box(
 			queue,
@@ -1601,17 +1769,59 @@ local function buildDoorWall(root: Instance)
 		DETAIL
 	)
 
-	-- red stencil, painted a little crooked, between the two wings
+	-- red stencil, painted a little crooked, between the two wings; it drips and breathes
 	local stencil = box(
 		queue,
 		"Stencil",
 		Vector3.new(11, 2, 0.05),
-		CFrame.new(0, 13.1, wallZ + 0.03) * CFrame.Angles(0, 0, math.rad(-1.5)),
+		CFrame.new(0, 12.3, wallZ + 0.03) * CFrame.Angles(0, 0, math.rad(-1.5)),
 		C.block,
 		Enum.Material.Brick,
 		INVISIBLE
 	)
 	surfaceText(stencil, Enum.NormalId.Back, "PICK A DOOR", Enum.Font.SpecialElite, C.redPaint)
+	paintDrips(queue, 0, 9, 11.5, wallZ, 9)
+	local stencilGlow = pointLight(stencil, 9, 0.25, false, Color3.fromRGB(255, 50, 40))
+	stencilGlow.Name = "Glow"
+	local drip = Instance.new("ParticleEmitter")
+	drip.Name = "Drip"
+	drip.EmissionDirection = Enum.NormalId.Bottom
+	drip.Rate = 1.2
+	drip.Lifetime = NumberRange.new(0.6, 1)
+	drip.Speed = NumberRange.new(0, 0.2)
+	drip.Acceleration = Vector3.new(0, -14, 0)
+	drip.Size = NumberSequence.new(0.07)
+	drip.Squash = NumberSequence.new(-1.2) -- stretch into drops
+	drip.Color = ColorSequence.new(C.redPaint)
+	drip.LightEmission = 0
+	drip.LightInfluence = 1
+	drip.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.3) })
+	drip.Parent = stencil
+
+	-- dust hanging in the light in front of the doors
+	local dustVolume =
+		box(queue, "Dust", Vector3.new(HALF_X * 2 - 4, 9, 12), Vector3.new(0, 6, wallZ + 7), C.block, nil, INVISIBLE)
+	local dust = Instance.new("ParticleEmitter")
+	dust.Name = "Dust"
+	dust.Shape = Enum.ParticleEmitterShape.Box
+	dust.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+	dust.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	dust.Rate = 14
+	dust.Lifetime = NumberRange.new(6, 10)
+	dust.Speed = NumberRange.new(0, 0.1)
+	dust.Acceleration = Vector3.new(0, -0.02, 0)
+	dust.Drag = 1
+	dust.Size = NumberSequence.new(0.06)
+	dust.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.3, 0.4),
+		NumberSequenceKeypoint.new(0.7, 0.4),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	dust.Color = ColorSequence.new(Color3.fromRGB(255, 230, 190))
+	dust.LightEmission = 0.4
+	dust.LightInfluence = 1
+	dust.Parent = dustVolume
 
 	-- one bulb in front of the doors that won't stay on
 	local _, bulb = bareBulb(queue, Vector3.new(5, CEILING - 4.5, wallZ + 12), 22, 1.2, true)

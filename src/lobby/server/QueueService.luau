@@ -78,6 +78,7 @@ local function updateDisplay(pad: PadState)
 	local timeLeft = pad.countdown and math.max(0, math.ceil(pad.countdown)) or 0
 	pad.model:SetAttribute("Count", count)
 	pad.model:SetAttribute("TimeLeft", timeLeft)
+	pad.model:SetAttribute("Launching", pad.launching)
 	local sign = pad.model:FindFirstChild("Sign")
 	local status = sign and sign:FindFirstChild("SurfaceGui") and sign.SurfaceGui:FindFirstChild("Status")
 	if status then
