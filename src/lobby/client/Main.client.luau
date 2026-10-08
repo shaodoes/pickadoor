@@ -200,7 +200,7 @@ local viewport = UIKit.new("ViewportFrame", {
 }, { UIKit.corner(8), UIKit.stroke(Colors.gold, 1) })
 local previewCamera = UIKit.new("Camera", { FieldOfView = 40, Parent = viewport })
 viewport.CurrentCamera = previewCamera
-previewCamera.CFrame = CFrame.lookAt(Vector3.new(0, 1.6, 6.5), Vector3.new(0, 1.15, 0))
+previewCamera.CFrame = CFrame.lookAt(Vector3.new(0, 1.9, 6.4), Vector3.new(0, 1.35, 0))
 local previewName = UIKit.label({
 	Text = "",
 	Font = Fonts.title,
@@ -222,6 +222,12 @@ local function preview(id: string)
 	previewModel.Parent = viewport
 	previewName.Text = Lanterns.getOrDefault(id).name
 end
+
+lanternPanel:GetPropertyChangedSignal("Visible"):Connect(function()
+	if lanternPanel.Visible and data then
+		preview(data.EquippedLantern)
+	end
+end)
 
 RunService.RenderStepped:Connect(function()
 	if previewModel and lanternPanel.Visible then

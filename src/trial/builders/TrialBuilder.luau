@@ -165,7 +165,10 @@ function TrialBuilder.build()
 
 	room.Parent = workspace
 
-	Lighting.Technology = Enum.Technology.Future
+	-- Technology is engine-protected from scripts; set Lighting.Technology = Future in Studio.
+	pcall(function()
+		Lighting.Technology = Enum.Technology.Future
+	end)
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
 	Lighting.Ambient = Color3.fromRGB(16, 14, 12)

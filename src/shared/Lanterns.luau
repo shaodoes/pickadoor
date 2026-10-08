@@ -1,15 +1,16 @@
 -- Lantern catalog. Every player owns the default; the rest are bought with Keys.
 local Lanterns = {}
 
-Lanterns.DefaultId = "brass"
+Lanterns.DefaultId = "copper"
 
 Lanterns.List = {
 	{
-		id = "brass",
-		name = "Brass Classic",
+		id = "copper",
+		name = "Copper Classic",
 		description = "Standard issue. It has seen a lot of doors.",
 		price = 0,
-		bodyColor = Color3.fromRGB(163, 120, 55),
+		bodyColor = Color3.fromRGB(128, 64, 40),
+		trimColor = Color3.fromRGB(190, 112, 74),
 		bodyMaterial = Enum.Material.Metal,
 		glassColor = Color3.fromRGB(255, 214, 160),
 		lightColor = Color3.fromRGB(255, 170, 90),

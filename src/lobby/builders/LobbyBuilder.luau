@@ -39,7 +39,7 @@ local C = {
 	window = Color3.fromRGB(110, 140, 190),
 	fabric = Color3.fromRGB(110, 36, 34),
 	marble = Color3.fromRGB(96, 86, 80),
-	screen = Color3.fromRGB(70, 200, 165),
+	screen = Color3.fromRGB(70, 175, 135),
 }
 
 local BOOK_COLORS = {
@@ -383,6 +383,24 @@ local function shelfUnit(
 	return unit
 end
 
+-- Single hanging lamp: chain from the ceiling, brass cap, glowing shade.
+local function pendantLamp(parent: Instance, pos: Vector3, range: number, brightness: number)
+	local model = folder(parent, "Pendant")
+	box(
+		model,
+		"Chain",
+		Vector3.new(0.15, CEILING - pos.Y, 0.15),
+		Vector3.new(pos.X, (CEILING + pos.Y) / 2, pos.Z),
+		C.metal,
+		Enum.Material.Metal,
+		DETAIL
+	)
+	box(model, "Cap", Vector3.new(1.4, 0.3, 1.4), pos + Vector3.new(0, 0.35, 0), C.brass, Enum.Material.Metal, DETAIL)
+	local shade = box(model, "Shade", Vector3.new(1.1, 0.7, 1.1), pos, C.glow, Enum.Material.Neon, DETAIL)
+	pointLight(shade, range, brightness, false)
+	return model
+end
+
 local function buildStacks(root: Instance)
 	local stacks = folder(root, "Stacks")
 	-- freestanding double-sided stacks either side of the aisle, perpendicular to it
@@ -399,6 +417,12 @@ local function buildStacks(root: Instance)
 	local faceBack = CFrame.Angles(0, math.rad(180), 0)
 	for _, x in { -36, 24 } do
 		shelfUnit(stacks, CFrame.new(x, 0, HALF_Z - 1.8) * faceBack, 22, 20, 2.6, false)
+	end
+	-- dim pendants down the gaps between stacks so the side aisles aren't pitch black
+	for _, s in { -1, 1 } do
+		for _, z in { 49, 21, -7 } do
+			pendantLamp(stacks, Vector3.new(s * 25, 18, z), 18, 0.8)
+		end
 	end
 end
 
@@ -986,6 +1010,7 @@ local function buildShop(root: Instance)
 	)
 	surfaceText(sign, Enum.NormalId.Right, "SHOP", nil, C.trim)
 	surfaceText(sign, Enum.NormalId.Left, "SHOP", nil, C.trim)
+	pendantLamp(shop, Vector3.new(cx + 2.5, 9, cz - 3), 18, 1.2)
 	prompt(top, "Librarian's Desk", "Browse Shop", "Shop")
 end
 
@@ -1009,6 +1034,13 @@ local function buildLanternBench(root: Instance)
 		local z = cz - 5 + (i - 1) * (10 / math.max(#Lanterns.List - 1, 1))
 		local lantern = LanternBuilder.buildModel(def.id, true)
 		lantern:PivotTo(CFrame.new(cx, 3.2, z) * CFrame.Angles(0, math.rad(rng:NextInteger(-30, 30)), 0))
+		-- five lanterns side by side blow out the table; keep them as soft glows
+		local light = lantern:FindFirstChild("Light", true)
+		if light then
+			light.Brightness *= 0.3
+			light.Range = 8
+			light.Shadows = false
+		end
 		lantern.Parent = bench
 	end
 	local sign = box(
@@ -1251,11 +1283,16 @@ local function buildDoorWall(root: Instance)
 	pads.Name = "Pads"
 	pads.Parent = root
 
-	local wings = { A = { -50, -34, -18 }, B = { 18, 34, 50 } }
+	-- mirrored wings: Solo on the outside, Squad nearest the clock
+	local wings = { A = { -50, -34, -18 }, B = { 50, 34, 18 } }
 	for wing, xs in wings do
 		for i, mode in Config.ModeOrder do
 			buildPad(pads, wing, mode, xs[i])
+			pendantLamp(queue, Vector3.new(xs[i], 17, -HALF_Z + 9), 20, 1.3)
 		end
+	end
+	for _, x in { -34, 34 } do
+		chandelier(queue, Vector3.new(x, 24, -HALF_Z + 20))
 	end
 
 	-- centerpiece between the wings: grandfather clock under the title board
@@ -1356,7 +1393,10 @@ end
 -- Lighting: dark, warm, hazy. Future tech so every lamp casts real light.
 ------------------------------------------------------------------------------------------
 local function setupLighting()
-	Lighting.Technology = Enum.Technology.Future
+	-- Technology is engine-protected from scripts; set Lighting.Technology = Future in Studio.
+	pcall(function()
+		Lighting.Technology = Enum.Technology.Future
+	end)
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
 	Lighting.Ambient = Color3.fromRGB(14, 9, 6)
