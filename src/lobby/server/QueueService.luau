@@ -227,6 +227,34 @@ function QueueService.start(lobby: Instance)
 		end
 	end)
 
+	-- "PICK A DOOR" button: join people already waiting if anyone is, otherwise the nearest Solo door
+	Remotes.get("QuickJoin").OnServerEvent:Connect(function(player)
+		local root = rootPart(player)
+		if not root or padOf(player) then
+			return
+		end
+		local best, bestScore = nil, -math.huge
+		for _, pad in pads do
+			if not pad.launching and #pad.members < pad.capacity then
+				local score = if #pad.members > 0
+					then 10 + #pad.members / pad.capacity
+					elseif pad.mode == "Solo" then 5
+					else 1
+				score -= (root.Position - pad.zone.Position).Magnitude / 1000 -- nearer wins a tie
+				if score > bestScore then
+					best, bestScore = pad, score
+				end
+			end
+		end
+		if not best then
+			notify(player, "Every door is busy. Try again in a moment.")
+			return
+		end
+		cooldownUntil[player] = nil
+		local spot = best.zone.Position - Vector3.new(0, best.zone.Size.Y / 2 - 3, 0)
+		root.CFrame = CFrame.lookAt(spot, spot + Vector3.new(0, 0, -1)) -- facing the door
+	end)
+
 	Players.PlayerRemoving:Connect(function(player)
 		cooldownUntil[player] = nil
 		local pad = padOf(player)

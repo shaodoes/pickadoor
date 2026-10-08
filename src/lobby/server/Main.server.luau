@@ -40,13 +40,20 @@ task.spawn(function()
 				-- the glowing core goes dark with the light, so the lamp really blinks
 				local core = entry.light.Parent
 				entry.light.Brightness = 0
+				local glow = core:FindFirstChild("Halo")
 				if core:IsA("BasePart") then
 					core.Transparency = 0.85
+				end
+				if glow then
+					glow.Enabled = false
 				end
 				task.delay(0.05 + math.random() * 0.25, function()
 					entry.light.Brightness = entry.base
 					if core:IsA("BasePart") then
-						core.Transparency = 0
+						core.Transparency = 0.35
+					end
+					if glow then
+						glow.Enabled = true
 					end
 				end)
 			end

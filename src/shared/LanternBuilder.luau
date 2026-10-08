@@ -108,6 +108,29 @@ function LanternBuilder.buildModel(id: string?, anchored: boolean?): Model
 	local flame = addPart(model, nil, "Flame", v(0.2, 0.32, 0.2), at(0, 0.8, 0), def.lightColor, Enum.Material.Neon, {
 		Shape = Enum.PartType.Ball,
 	})
+	-- soft glow around the flame so the lantern reads as light, not a bulb
+	local glow = Instance.new("BillboardGui")
+	glow.Name = "Halo"
+	glow.Size = UDim2.fromScale(2.2 * K, 2.2 * K)
+	glow.LightInfluence = 0
+	glow.Brightness = 1.4
+	glow.MaxDistance = 80
+	glow.Parent = flame
+	for i, spec in { { 1, 0.94 }, { 0.65, 0.88 }, { 0.38, 0.75 }, { 0.18, 0.5 } } do
+		local ring = Instance.new("Frame")
+		ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.Position = UDim2.fromScale(0.5, 0.5)
+		ring.Size = UDim2.fromScale(spec[1], spec[1])
+		ring.BackgroundColor3 = def.lightColor:Lerp(Color3.new(1, 1, 1), (i - 1) / 5)
+		ring.BackgroundTransparency = spec[2]
+		ring.BorderSizePixel = 0
+		ring.ZIndex = i
+		ring.Parent = glow
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = ring
+	end
+
 	local light = Instance.new("PointLight")
 	light.Name = "Light"
 	light.Color = def.lightColor
@@ -131,10 +154,12 @@ function LanternBuilder.buildTool(id: string?): Tool
 	-- Grip point is the ring, measured from the Handle's centre; no rotation, so it hangs upright below the hand.
 	tool.Grip = CFrame.new(0, RING_Y - 0.11 * K, 0)
 	tool:SetAttribute("LanternId", model:GetAttribute("LanternId"))
-	-- held right next to the avatar, so soften it or the character blows out
+	-- the lobby is dim now, so the lantern you carry is what lights your way: near full strength,
+	-- a little wider, softened only enough that the avatar holding it doesn't blow out
 	local light = model:FindFirstChild("Light", true)
 	if light then
-		light.Brightness *= 0.45
+		light.Brightness *= 0.65
+		light.Range += 7
 	end
 	for _, child in model:GetChildren() do
 		child.Parent = tool

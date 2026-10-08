@@ -133,7 +133,7 @@ function UIKit.animate(button: GuiButton, baseColor: Color3?)
 	return button
 end
 
-function UIKit.button(text: string, props: { [string]: any }?)
+function UIKit.button(text: string, props: { [string]: any }?, strokeColor: Color3?)
 	local merged = {
 		Text = text,
 		Font = UIKit.Fonts.ui,
@@ -146,7 +146,7 @@ function UIKit.button(text: string, props: { [string]: any }?)
 	for key, value in props or {} do
 		merged[key] = value
 	end
-	local button = UIKit.new("TextButton", merged, { UIKit.corner(6), UIKit.stroke(), UIKit.sheen() })
+	local button = UIKit.new("TextButton", merged, { UIKit.corner(6), UIKit.stroke(strokeColor), UIKit.sheen() })
 	return UIKit.animate(button)
 end
 

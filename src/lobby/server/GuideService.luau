@@ -11,8 +11,9 @@ local DataService = require(ServerStorage.Common.DataService)
 
 local GuideService = {}
 
--- In the open middle of the room, turned toward the foot of the stairs where players arrive.
-local POSITION = Vector3.new(-5, 0, 26)
+-- On the open walkway right in front of the stairs, beside a lectern, turned toward where players
+-- arrive, so he's the first thing you see (his old spot was hidden behind a bookcase).
+local POSITION = Vector3.new(5, 0, 27)
 local FACING = Vector3.new(13, 0, 34)
 local IDLE_ANIMATION = "rbxassetid://507766666" -- default R15 idle
 
@@ -291,8 +292,85 @@ function GuideService.build(parent: Instance): Model?
 	return rig
 end
 
+-- A small reading lectern next to the guide: post, slanted top, an open book and a candle.
+local function lectern(parent: Instance, guide: Model)
+	local root = guide.HumanoidRootPart.CFrame
+	local base = CFrame.new((root * CFrame.new(-2.6, 0, -0.6)).Position)
+		* root.Rotation
+		* CFrame.Angles(0, math.rad(25), 0)
+	local model = Instance.new("Model")
+	model.Name = "Lectern"
+	local function part(name, size, cf, color, material, extra)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored = true
+		p.Size = size
+		p.CFrame = cf
+		p.Color = color
+		p.Material = material
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		for k, v in extra or {} do
+			p[k] = v
+		end
+		p.Parent = model
+		return p
+	end
+	local wood = Color3.fromRGB(78, 52, 34)
+	part("Foot", Vector3.new(1.8, 0.3, 1.4), base * CFrame.new(0, 0.15, 0), wood, Enum.Material.Wood)
+	part("Post", Vector3.new(0.5, 3.4, 0.5), base * CFrame.new(0, 1.9, 0), wood, Enum.Material.Wood)
+	local top = part(
+		"Top",
+		Vector3.new(2.2, 0.2, 1.6),
+		base * CFrame.new(0, 3.7, 0) * CFrame.Angles(math.rad(-22), 0, 0),
+		Color3.fromRGB(96, 64, 40),
+		Enum.Material.Wood
+	)
+	for _, side in { -1, 1 } do
+		part(
+			"Page",
+			Vector3.new(0.95, 0.06, 1.3),
+			top.CFrame * CFrame.new(side * 0.5, 0.13, 0) * CFrame.Angles(0, 0, math.rad(side * -4)),
+			Color3.fromRGB(226, 216, 190),
+			Enum.Material.SmoothPlastic,
+			{ CanCollide = false }
+		)
+	end
+	part(
+		"Candle",
+		Vector3.new(0.22, 0.5, 0.22),
+		top.CFrame * CFrame.new(0.95, 0.35, -0.55),
+		Color3.fromRGB(235, 225, 200),
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+	local flame = part(
+		"Flame",
+		Vector3.new(0.14, 0.24, 0.14),
+		top.CFrame * CFrame.new(0.95, 0.72, -0.55),
+		Color3.fromRGB(255, 150, 60),
+		Enum.Material.Neon,
+		{
+			CanCollide = false,
+			CastShadow = false,
+			Shape = Enum.PartType.Ball,
+		}
+	)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 170, 100)
+	light.Range = 10
+	light.Brightness = 1.2
+	light.Shadows = true
+	light.Parent = flame
+	light:SetAttribute("Flicker", "furnace") -- the lobby's flicker loop makes it waver like a flame
+	model.Parent = parent
+end
+
 function GuideService.start(lobby: Instance)
-	GuideService.build(lobby)
+	local guide = GuideService.build(lobby)
+	if guide then
+		lectern(lobby, guide)
+	end
 	Remotes.get("GuideSeen").OnServerEvent:Connect(function(player)
 		DataService.update(player, function(data)
 			data.SeenGuide = true

@@ -6,6 +6,7 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SocialService = game:GetService("SocialService")
+local StarterGui = game:GetService("StarterGui")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -16,6 +17,16 @@ local UIKit = require(Shared.UIKit)
 
 local player = Players.LocalPlayer
 local Colors, Fonts = UIKit.Colors, UIKit.Fonts
+
+-- the lantern is always in hand: hide the hotbar so it can't be put away
+task.spawn(function()
+	for _ = 1, 20 do
+		if pcall(StarterGui.SetCoreGuiEnabled, StarterGui, Enum.CoreGuiType.Backpack, false) then
+			return
+		end
+		task.wait(0.5)
+	end
+end)
 
 local data = nil -- latest profile snapshot from the server
 
@@ -82,30 +93,82 @@ local function setKeys(value: number)
 	end)
 end
 
+-- Bottom-centre bar, after the reference lobby: one big cream PICK A DOOR button (quick join),
+-- with a row of smaller buttons beneath it.
+local CREAM = Color3.fromRGB(246, 224, 192)
+local CREAM_HOT = Color3.fromRGB(236, 168, 140)
+local INK = Color3.fromRGB(58, 36, 24)
+local BOLD = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Bold)
+
 local menu = UIKit.new("Frame", {
 	Name = "Menu",
 	BackgroundTransparency = 1,
-	AnchorPoint = Vector2.new(1, 0.5),
-	Position = UDim2.new(1, -16, 0.5, 0),
-	Size = UDim2.fromOffset(160, 280),
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -14),
+	Size = UDim2.fromOffset(640, 150),
 	Parent = gui,
-}, {
-	UIKit.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 })
 
-local function menuButton(text: string, order: number)
+local playButton = UIKit.button("▶  PICK A DOOR", {
+	Name = "PickADoor",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.fromScale(0.5, 0),
+	Size = UDim2.fromOffset(330, 72),
+	BackgroundColor3 = CREAM,
+	TextColor3 = INK,
+	FontFace = BOLD,
+	TextSize = 38,
+	Parent = menu,
+}, Color3.fromRGB(150, 110, 72))
+
+local buttonRow = UIKit.new("Frame", {
+	Name = "Row",
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.fromScale(0.5, 1),
+	Size = UDim2.new(1, 0, 0, 52),
+	Parent = menu,
+}, {
+	UIKit.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}),
+})
+
+local function menuButton(text: string, order: number, width: number?)
 	return UIKit.button(text, {
 		Name = (text:gsub("%s", "")),
 		LayoutOrder = order,
-		Size = UDim2.fromOffset(160, 46),
-		Parent = menu,
-	})
+		Size = UDim2.fromOffset(width or 112, 50),
+		BackgroundColor3 = CREAM,
+		TextColor3 = INK,
+		FontFace = BOLD,
+		TextSize = 19,
+		Parent = buttonRow,
+	}, Color3.fromRGB(150, 110, 72))
 end
-local helpButton = menuButton("HOW TO PLAY", 0)
-local shopButton = menuButton("SHOP", 1)
+local shopButton = menuButton("SHOP", 1, 128)
 local lanternButton = menuButton("LANTERN", 2)
-local inviteButton = menuButton("INVITE", 3)
-local reviveButton = menuButton("REVIVE PASS", 4)
+local helpButton = menuButton("HOW TO PLAY", 3, 128)
+local inviteButton = menuButton("INVITE", 4)
+local reviveButton = menuButton("REVIVE PASS", 5, 128)
+
+-- while you're queued the big button becomes LEAVE
+local function refreshPlayButton()
+	local queued = player:GetAttribute("QueuedPad") ~= nil
+	playButton.Text = queued and "✕  LEAVE QUEUE" or "▶  PICK A DOOR"
+	playButton:SetAttribute("BaseColor", queued and CREAM_HOT or CREAM)
+end
+player:GetAttributeChangedSignal("QueuedPad"):Connect(refreshPlayButton)
+playButton.Activated:Connect(function()
+	if player:GetAttribute("QueuedPad") then
+		Remotes.get("LeaveQueue"):FireServer()
+	else
+		Remotes.get("QuickJoin"):FireServer()
+	end
+end)
 
 ------------------------------------------------------------------------------------------
 -- Panels
@@ -380,7 +443,7 @@ task.spawn(function()
 			UIKit.tween(
 				queueBar,
 				TweenInfo.new(0.3, queued and Enum.EasingStyle.Back or Enum.EasingStyle.Quad),
-				{ Position = UDim2.new(0.5, 0, 1, queued and -24 or 90) }
+				{ Position = UDim2.new(0.5, 0, 1, queued and -176 or 90) }
 			)
 		end
 		if pad then
@@ -449,9 +512,9 @@ data = Remotes.get("GetData"):InvokeServer()
 refresh()
 preview(data and data.EquippedLantern or Lanterns.DefaultId)
 
--- the menu slides in from the right edge
+-- the bar slides up from the bottom edge
 local menuTarget = menu.Position
-menu.Position = menuTarget + UDim2.fromOffset(240, 0)
+menu.Position = menuTarget + UDim2.fromOffset(0, 180)
 task.delay(0.5, function()
 	UIKit.tween(menu, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Position = menuTarget })
 end)

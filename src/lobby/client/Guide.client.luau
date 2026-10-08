@@ -282,6 +282,37 @@ ProximityPromptService.PromptTriggered:Connect(function(triggered)
 end)
 script.Parent:WaitForChild("OpenGuide").Event:Connect(start)
 
+-- he waves at you when you come near, until you've talked to him this session
+local waveTrack = nil
+local talkedThisSession = false
+prompt.Triggered:Connect(function()
+	talkedThisSession = true
+end)
+task.spawn(function()
+	local animator = guide:FindFirstChildOfClass("Humanoid") and guide.Humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		return
+	end
+	local wave = Instance.new("Animation")
+	wave.AnimationId = "rbxassetid://507770239" -- default R15 wave
+	local ok, track = pcall(animator.LoadAnimation, animator, wave)
+	if not ok then
+		return
+	end
+	waveTrack = track
+	local lastWave = 0
+	while true do
+		task.wait(1)
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local near = root and (root.Position - head.Position).Magnitude < 22
+		if near and not talkedThisSession and not talking and os.clock() - lastWave > 9 then
+			lastWave = os.clock()
+			waveTrack:Play(0.2)
+		end
+	end
+end)
+
 -- first visit: point the player at the guide
 local data = Remotes.get("GetData"):InvokeServer()
 if data and not data.SeenGuide then

@@ -24,6 +24,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Lanterns = require(Shared.Lanterns)
 local LanternBuilder = require(Shared.LanternBuilder)
+local Books = require(script.Parent.Books)
 
 local LobbyBuilder = {}
 
@@ -33,8 +34,8 @@ local HALF_X, HALF_Z, CEILING, WALL = 36, 48, 16, 4
 
 local C = {
 	concrete = Color3.fromRGB(104, 98, 90),
-	block = Color3.fromRGB(140, 137, 130), -- painted cinderblock, a cool off-white
-	blockLow = Color3.fromRGB(96, 86, 74), -- grime band along the floor
+	block = Color3.fromRGB(132, 137, 144), -- smooth painted concrete, cool grey-blue (reference)
+	blockLow = Color3.fromRGB(70, 74, 80), -- grime band along the floor
 	joist = Color3.fromRGB(92, 66, 44),
 	wood = Color3.fromRGB(78, 52, 34),
 	darkWood = Color3.fromRGB(48, 32, 22),
@@ -163,6 +164,37 @@ end
 -- throws a pool of light down, or a frosted "globe" that glows all round. `pos` is the bulb.
 -- Returns the model and the glowing core (which carries the PointLight).
 local GLOW = Color3.fromRGB(255, 128, 48) -- deep amber; Neon renders much paler than its colour
+
+-- Soft glow sprite around a light so you see a warm bloom, not the bulb: concentric circles in a
+-- BillboardGui, fading outward to fake a radial falloff (no image asset needed).
+local function halo(part: BasePart, studs: number, color: Color3?)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Halo"
+	gui.Size = UDim2.fromScale(studs, studs) -- billboard scale is in studs
+	gui.LightInfluence = 0
+	gui.Brightness = 1.6
+	gui.MaxDistance = 120
+	gui.Parent = part
+	for i, spec in { { 1, 0.95 }, { 0.78, 0.92 }, { 0.58, 0.88 }, { 0.4, 0.8 }, { 0.24, 0.62 }, { 0.12, 0.35 } } do
+		local ring = Instance.new("Frame")
+		ring.Name = "Ring" .. i
+		ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.Position = UDim2.fromScale(0.5, 0.5)
+		ring.Size = UDim2.fromScale(spec[1], spec[1])
+		ring.BackgroundColor3 = (color or Color3.fromRGB(255, 176, 104)):Lerp(
+			Color3.fromRGB(255, 236, 200),
+			(i - 1) / 6
+		)
+		ring.BackgroundTransparency = spec[2]
+		ring.BorderSizePixel = 0
+		ring.ZIndex = i
+		ring.Parent = gui
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = ring
+	end
+	return gui
+end
 local function bareBulb(
 	parent: Instance,
 	pos: Vector3,
@@ -215,6 +247,8 @@ local function bareBulb(
 
 	local core = box(model, "Core", Vector3.new(0.5, 0.5, 0.5), pos, GLOW, Enum.Material.Neon, DETAIL)
 	core.Shape = Enum.PartType.Ball
+	core.Transparency = 0.35
+	halo(core, style == "shade" and 2.6 or 3.6)
 	if style == "shade" then
 		-- stepped enamel cone, dark green outside, lit warm inside
 		local enamel = Color3.fromRGB(34, 56, 44)
@@ -261,7 +295,7 @@ local function bareBulb(
 		-- frosted glass globe around the glowing core
 		box(model, "Globe", Vector3.new(1.3, 1.3, 1.3), pos, Color3.fromRGB(255, 224, 182), Enum.Material.Glass, {
 			Shape = Enum.PartType.Ball,
-			Transparency = 0.45,
+			Transparency = 0.22, -- frosted enough that the bulb inside is just a glow
 			CanCollide = false,
 			CanQuery = false,
 			CastShadow = false,
@@ -292,6 +326,8 @@ local function cagedLight(parent: Instance, cf: CFrame, range: number, brightnes
 	local bulb =
 		box(model, "Bulb", Vector3.new(0.5, 0.5, 0.5), cf * CFrame.new(0, 0, 0.5), C.bulb, Enum.Material.Neon, DETAIL)
 	bulb.Shape = Enum.PartType.Ball
+	bulb.Transparency = 0.35
+	halo(bulb, 2.4)
 	for _, a in { 0, 90 } do
 		box(
 			model,
@@ -340,7 +376,7 @@ local function sideWall(parent: Instance, side: number)
 				Vector3.new(WALL, y1 - y0, z1 - z0),
 				Vector3.new(x, (y0 + y1) / 2, (z0 + z1) / 2),
 				C.block,
-				Enum.Material.Brick
+				Enum.Material.Plaster
 			)
 		end
 	end
@@ -454,7 +490,7 @@ local function buildShell(root: Instance)
 			Vector3.new(W + WALL * 2, wallH, WALL),
 			Vector3.new(0, wallH / 2, s * (HALF_Z + WALL / 2)),
 			C.block,
-			Enum.Material.Brick
+			Enum.Material.Plaster
 		)
 		box(
 			shell,
@@ -778,28 +814,6 @@ end
 ------------------------------------------------------------------------------------------
 -- Shelving: a few wooden bookcases and a rack of boxed books
 ------------------------------------------------------------------------------------------
-local function fillBooks(parent: Instance, at, length: number, y: number, zCenter: number, depth: number)
-	local x = -length / 2 + 0.2
-	while x < length / 2 - 0.4 do
-		local width = math.min(rng:NextNumber(1.1, 3.0), length / 2 - 0.2 - x)
-		local roll = rng:NextNumber()
-		if roll > 0.12 then
-			local h = rng:NextNumber(1.3, 2.0)
-			local lean = roll > 0.92 and math.rad(rng:NextNumber(-14, 14)) or 0
-			box(
-				parent,
-				"Books",
-				Vector3.new(width - 0.05, h, depth),
-				at(x + width / 2, y + h / 2, zCenter) * CFrame.Angles(0, 0, lean),
-				BOOK_COLORS[rng:NextInteger(1, #BOOK_COLORS)],
-				Enum.Material.Fabric,
-				DETAIL
-			)
-		end
-		x += width
-	end
-end
-
 -- Bookcase centered at `cf` (base on floor), long along local X, books facing local +Z (and -Z if doubleSided).
 local function bookcase(
 	parent: Instance,
@@ -847,14 +861,14 @@ local function bookcase(
 				{ CastShadow = false }
 			)
 		end
-		local y0 = y + 0.1
+		local y0 = if level == 0 then y else y + 0.1 -- books sit flush on the plinth, or on the board
 		if doubleSided then
 			local bookDepth = depth / 2 - 0.45
 			for _, side in { 1, -1 } do
-				fillBooks(unit, at, length, y0, side * (0.15 + bookDepth / 2 + 0.1), bookDepth)
+				Books.fillShelf(unit, at, length, y0, side * (0.15 + bookDepth / 2 + 0.1), bookDepth, rng)
 			end
 		else
-			fillBooks(unit, at, length, y0, 0.25, depth - 0.7)
+			Books.fillShelf(unit, at, length, y0, 0.25, depth - 0.7, rng)
 		end
 	end
 	if rng:NextNumber() > 0.4 then
@@ -1749,7 +1763,7 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 	fog.Parent = fogSource
 
 	local light =
-		cagedLight(queue, CFrame.new(x + 3.9, 8.6, wallZ + 0.15) * CFrame.Angles(math.rad(-20), 0, 0), 14, 1.1)
+		cagedLight(queue, CFrame.new(x + 3.9, 8.6, wallZ + 0.15) * CFrame.Angles(math.rad(-20), 0, 0), 11, 0.6)
 	light.Name = "DoorLight"
 
 	-- stencilled straight onto the cinderblock above the door (faces +Z = Back face)
@@ -2307,6 +2321,108 @@ local function buildFinishes(root: Instance)
 			DETAIL
 		)
 	end
+
+	-- reference-style walls: darker painted lower panels with a trim rail, and panel seams above
+	local lower = Color3.fromRGB(84, 90, 98)
+	local seam = Color3.fromRGB(96, 100, 108)
+	local bandH = 4
+	local function wallStrip(name, size, cf, color, material)
+		box(finishes, name, size, cf, color, material, DETAIL)
+	end
+	-- along a wall: `axis` "x" walls run along Z at x = side * HALF_X; "z" walls run along X
+	local function band(axis: string, side: number, from: number, to: number)
+		if to - from < 0.2 then
+			return
+		end
+		local mid, len = (from + to) / 2, to - from
+		if axis == "x" then
+			local x = side * (HALF_X - 0.08)
+			wallStrip(
+				"Wainscot",
+				Vector3.new(0.16, bandH, len),
+				CFrame.new(x, bandH / 2, mid),
+				lower,
+				Enum.Material.Concrete
+			)
+			wallStrip(
+				"Rail",
+				Vector3.new(0.3, 0.25, len),
+				CFrame.new(side * (HALF_X - 0.15), bandH, mid),
+				Color3.fromRGB(60, 64, 70),
+				Enum.Material.Metal
+			)
+		else
+			local z = side * (HALF_Z - 0.08)
+			wallStrip(
+				"Wainscot",
+				Vector3.new(len, bandH, 0.16),
+				CFrame.new(mid, bandH / 2, z),
+				lower,
+				Enum.Material.Concrete
+			)
+			wallStrip(
+				"Rail",
+				Vector3.new(len, 0.25, 0.3),
+				CFrame.new(mid, bandH, side * (HALF_Z - 0.15)),
+				Color3.fromRGB(60, 64, 70),
+				Enum.Material.Metal
+			)
+		end
+	end
+	band("x", -1, -HALF_Z, HALF_Z)
+	band("x", 1, -HALF_Z, HALF_Z)
+	band("z", 1, -HALF_X, STAIR.x0) -- front wall, up to the stairs
+	-- back wall: between the doors only
+	local doorXs = { -29, -19, -9, 9, 19, 29 }
+	local cursor = -HALF_X
+	for _, dx in doorXs do
+		band("z", -1, cursor, dx - 3.3)
+		cursor = dx + 3.3
+	end
+	band("z", -1, cursor, HALF_X)
+
+	-- vertical panel seams on the upper wall, skipping windows and doors
+	local function blockedAlong(list, pos, pad)
+		for _, item in list do
+			if math.abs(pos - item[1]) < item[2] / 2 + pad then
+				return true
+			end
+		end
+		return false
+	end
+	for _, side in { -1, 1 } do
+		local openings = {}
+		for _, w in WINDOWS[side].list do
+			table.insert(openings, { w.z, w.w })
+		end
+		for z = -HALF_Z + 8, HALF_Z - 8, 8 do
+			if not blockedAlong(openings, z, 0.6) then
+				wallStrip(
+					"Seam",
+					Vector3.new(0.06, CEILING - bandH - 1.2, 0.08),
+					CFrame.new(side * (HALF_X - 0.03), (bandH + CEILING - 1.2) / 2, z),
+					seam,
+					Enum.Material.SmoothPlastic
+				)
+			end
+		end
+	end
+	local doorOpenings = {}
+	for _, dx in doorXs do
+		table.insert(doorOpenings, { dx, 6.6 })
+	end
+	table.insert(doorOpenings, { 0, 12 }) -- clock and stencil
+	for x = -HALF_X + 8, HALF_X - 8, 8 do
+		if not blockedAlong(doorOpenings, x, 0.4) then
+			wallStrip(
+				"Seam",
+				Vector3.new(0.08, CEILING - bandH - 1.2, 0.06),
+				CFrame.new(x, (bandH + CEILING - 1.2) / 2, -HALF_Z + 0.03),
+				seam,
+				Enum.Material.SmoothPlastic
+			)
+		end
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -2518,13 +2634,13 @@ local function setupLighting()
 	-- light haze, neutral grade, a touch of depth blur. The lamps carry the warmth.
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
-	Lighting.Ambient = Color3.fromRGB(40, 39, 37)
-	Lighting.OutdoorAmbient = Color3.fromRGB(24, 28, 30)
+	Lighting.Ambient = Color3.fromRGB(13, 12, 11) -- dim: light lives in pools around the lamps
+	Lighting.OutdoorAmbient = Color3.fromRGB(14, 17, 19)
 	Lighting.EnvironmentDiffuseScale = 0.2
 	Lighting.EnvironmentSpecularScale = 0.6
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 0.35
-	Lighting.ExposureCompensation = 0.3
+	Lighting.ExposureCompensation = 0.15
 
 	for _, child in Lighting:GetChildren() do
 		if child:IsA("PostEffect") or child:IsA("Atmosphere") or child:IsA("Sky") then
@@ -2532,12 +2648,12 @@ local function setupLighting()
 		end
 	end
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.22
+	atmosphere.Density = 0.3
 	atmosphere.Offset = 0
 	atmosphere.Color = Color3.fromRGB(62, 62, 58)
 	atmosphere.Decay = Color3.fromRGB(28, 32, 34)
 	atmosphere.Glare = 0
-	atmosphere.Haze = 0.6
+	atmosphere.Haze = 1.1
 	atmosphere.Parent = Lighting
 
 	local cc = Instance.new("ColorCorrectionEffect")

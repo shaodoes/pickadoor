@@ -12,6 +12,7 @@ local DEFINITIONS = {
 	BuyLantern = "RemoteFunction",
 	EquipLantern = "RemoteFunction",
 	LeaveQueue = "RemoteEvent",
+	QuickJoin = "RemoteEvent", -- client -> server: put me on the best mat
 	GuideSeen = "RemoteEvent", -- client -> server: finished the guide's introduction
 }
 
