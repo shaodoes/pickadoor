@@ -60,4 +60,16 @@ Config.Fates = {
 	},
 }
 
+-- UI / ambience sound effects (Creator Store audio, verified to load)
+Config.Sounds = {
+	Hover = { id = 119354387183704, volume = 0.25 },
+	Click = { id = 87437544236708, volume = 0.45 },
+	PanelOpen = { id = 95995953662374, volume = 0.5 }, -- book page turn
+	PanelClose = { id = 9118835414, volume = 0.3 },
+	Error = { id = 87519554692663, volume = 0.4 },
+	Purchase = { id = 100813529228543, volume = 0.5 },
+	Type = { id = 9120300134, volume = 0.18 }, -- typewriter key, used for the guide's dialogue
+	Knock = { id = 9120918417, volume = 0.5 },
+}
+
 return Config

@@ -33,6 +33,7 @@ local function defaults()
 		EquippedLantern = Lanterns.DefaultId,
 		TrialsPlayed = 0,
 		TrialsSurvived = 0,
+		SeenGuide = false,
 	}
 end
 
@@ -77,6 +78,7 @@ function DataService.snapshot(player: Player)
 		EquippedLantern = d.EquippedLantern,
 		TrialsPlayed = d.TrialsPlayed,
 		TrialsSurvived = d.TrialsSurvived,
+		SeenGuide = d.SeenGuide,
 	}
 end
 

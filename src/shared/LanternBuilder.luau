@@ -9,6 +9,7 @@ local LanternBuilder = {}
 local K = 0.8 -- overall scale; all dimensions below are pre-scale
 local RING_Y = 3.0 * K
 LanternBuilder.Height = 3.45 * K
+LanternBuilder.RingHeight = RING_Y -- height of the ring centre above the base, for hanging it from things
 
 local function v(x, y, z)
 	return Vector3.new(x * K, y * K, z * K)
@@ -133,7 +134,7 @@ function LanternBuilder.buildTool(id: string?): Tool
 	-- held right next to the avatar, so soften it or the character blows out
 	local light = model:FindFirstChild("Light", true)
 	if light then
-		light.Brightness *= 0.6
+		light.Brightness *= 0.45
 	end
 	for _, child in model:GetChildren() do
 		child.Parent = tool

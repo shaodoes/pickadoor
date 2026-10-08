@@ -1,5 +1,5 @@
--- Lobby HUD: Keys counter, menu (Shop / Lantern / Invite / Revive), shop + lantern panels,
--- queue status bar, and toasts.
+-- Lobby HUD: Keys counter, menu (How to Play / Shop / Lantern / Invite / Revive), shop + lantern
+-- panels, queue status bar, and toasts. Buttons and panels animate and click via UIKit.
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -26,9 +26,14 @@ local gui = UIKit.new("ScreenGui", {
 	Parent = player:WaitForChild("PlayerGui"),
 })
 
-local function toast(text: string)
-	UIKit.toast(gui, text)
+local function toast(text: string, kind: string?)
+	UIKit.toast(gui, text, kind)
 end
+
+-- The guide's dialogue lives in Guide.client; the menu button asks it to start through this.
+local openGuide = Instance.new("BindableEvent")
+openGuide.Name = "OpenGuide"
+openGuide.Parent = script.Parent
 
 ------------------------------------------------------------------------------------------
 -- HUD
@@ -49,21 +54,54 @@ local keysLabel = UIKit.label({
 })
 UIKit.corner(6).Parent = keysLabel
 UIKit.stroke().Parent = keysLabel
+local keysScale = UIKit.new("UIScale", { Parent = keysLabel })
+local shownKeys = nil
+
+-- Count the number up/down to the new value with a little pop.
+local function setKeys(value: number)
+	if shownKeys == nil then
+		shownKeys = value
+		keysLabel.Text = string.format("%d %s", value, Config.CurrencyName)
+		return
+	end
+	if value == shownKeys then
+		return
+	end
+	local from = shownKeys
+	shownKeys = value
+	keysScale.Scale = 1.15
+	UIKit.tween(keysScale, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Scale = 1 })
+	local counter = Instance.new("NumberValue")
+	counter.Value = from
+	counter.Changed:Connect(function(v)
+		keysLabel.Text = string.format("%d %s", math.round(v), Config.CurrencyName)
+	end)
+	local t = UIKit.tween(counter, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Value = value })
+	t.Completed:Connect(function()
+		counter:Destroy()
+	end)
+end
 
 local menu = UIKit.new("Frame", {
 	Name = "Menu",
 	BackgroundTransparency = 1,
 	AnchorPoint = Vector2.new(1, 0.5),
 	Position = UDim2.new(1, -16, 0.5, 0),
-	Size = UDim2.fromOffset(160, 220),
+	Size = UDim2.fromOffset(160, 280),
 	Parent = gui,
 }, {
 	UIKit.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 })
 
 local function menuButton(text: string, order: number)
-	return UIKit.button(text, { LayoutOrder = order, Size = UDim2.fromOffset(160, 46), Parent = menu })
+	return UIKit.button(text, {
+		Name = (text:gsub("%s", "")),
+		LayoutOrder = order,
+		Size = UDim2.fromOffset(160, 46),
+		Parent = menu,
+	})
 end
+local helpButton = menuButton("HOW TO PLAY", 0)
 local shopButton = menuButton("SHOP", 1)
 local lanternButton = menuButton("LANTERN", 2)
 local inviteButton = menuButton("INVITE", 3)
@@ -77,9 +115,16 @@ local lanternPanel, lanternContent = UIKit.panel(gui, "Lanterns", UDim2.fromOffs
 local panels = { shopPanel, lanternPanel }
 
 local function open(panel: Frame)
-	for _, other in panels do
-		other.Visible = other == panel and not panel.Visible
+	if UIKit.isOpen(panel) then
+		UIKit.hide(panel)
+		return
 	end
+	for _, other in panels do
+		if other ~= panel then
+			UIKit.hide(other)
+		end
+	end
+	UIKit.show(panel)
 end
 
 local function swatch(color: Color3)
@@ -91,13 +136,16 @@ local function swatch(color: Color3)
 end
 
 local function row(parent: Instance, order: number, height: number)
-	return UIKit.new("Frame", {
+	local frame = UIKit.new("Frame", {
 		LayoutOrder = order,
-		Size = UDim2.new(1, -10, 0, height),
+		Size = UDim2.new(1, -14, 0, height),
 		BackgroundColor3 = Colors.panelLight,
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.45,
 		Parent = parent,
-	}, { UIKit.corner(6) })
+	}, { UIKit.corner(6), UIKit.stroke(Colors.gold, 1) })
+	frame.UIStroke.Transparency = 0.75
+	UIKit.hoverRow(frame)
+	return frame
 end
 
 -- Shop -----------------------------------------------------------------------------------
@@ -105,7 +153,7 @@ local shopList = UIKit.scrollList(shopContent)
 
 local function promptRevivePass()
 	if Config.ReviveGamePassId == 0 then
-		toast("Revive pass isn't set up yet (Config.ReviveGamePassId).")
+		toast("Revive pass isn't set up yet (Config.ReviveGamePassId).", "error")
 	elseif player:GetAttribute("HasRevivePass") then
 		toast("You already own Revive.")
 	else
@@ -184,7 +232,7 @@ local function buildShop()
 					return
 				end
 				local res = Remotes.get("BuyLantern"):InvokeServer(def.id)
-				toast(res.message)
+				toast(res.message, res.ok and "success" or "error")
 			end)
 		end
 	end
@@ -280,11 +328,11 @@ local function buildLanterns()
 			if equipped then
 				return
 			elseif not owned then
-				toast(string.format("Buy %s in the Shop for %d %s.", def.name, def.price, Config.CurrencyName))
+				toast(string.format("Buy %s in the Shop for %d %s.", def.name, def.price, Config.CurrencyName), "error")
 				return
 			end
 			local res = Remotes.get("EquipLantern"):InvokeServer(def.id)
-			toast(res.message)
+			toast(res.message, not res.ok and "error" or nil)
 		end)
 	end
 end
@@ -295,7 +343,7 @@ end
 local queueBar = UIKit.new("Frame", {
 	Name = "QueueBar",
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -24),
+	Position = UDim2.new(0.5, 0, 1, 90), -- parked below the screen; slides up while queued
 	Size = UDim2.fromOffset(460, 64),
 	BackgroundColor3 = Colors.bg,
 	BackgroundTransparency = 0.1,
@@ -325,7 +373,16 @@ task.spawn(function()
 	while true do
 		local padName = player:GetAttribute("QueuedPad")
 		local pad = padName and pads:FindFirstChild(padName)
-		queueBar.Visible = pad ~= nil
+		local queued = pad ~= nil
+		if queued ~= (queueBar:GetAttribute("Shown") == true) then
+			queueBar:SetAttribute("Shown", queued)
+			queueBar.Visible = true
+			UIKit.tween(
+				queueBar,
+				TweenInfo.new(0.3, queued and Enum.EasingStyle.Back or Enum.EasingStyle.Quad),
+				{ Position = UDim2.new(0.5, 0, 1, queued and -24 or 90) }
+			)
+		end
 		if pad then
 			queueLabel.Text = string.format(
 				"%s   %d/%d   -   door opens in %ds",
@@ -344,12 +401,18 @@ end)
 ------------------------------------------------------------------------------------------
 local function refresh()
 	if data then
-		keysLabel.Text = string.format("%d %s", data.Keys, Config.CurrencyName)
+		setKeys(data.Keys)
 	end
 	buildShop()
 	buildLanterns()
 end
 
+helpButton.Activated:Connect(function()
+	for _, panel in panels do
+		UIKit.hide(panel)
+	end
+	openGuide:Fire()
+end)
 shopButton.Activated:Connect(function()
 	open(shopPanel)
 end)
@@ -362,7 +425,7 @@ inviteButton.Activated:Connect(function()
 	if ok and canSend then
 		SocialService:PromptGameInvite(player)
 	else
-		toast("Invites aren't available right now (they work in the published game).")
+		toast("Invites aren't available right now (they work in the published game).", "error")
 	end
 end)
 
@@ -385,3 +448,10 @@ end)
 data = Remotes.get("GetData"):InvokeServer()
 refresh()
 preview(data and data.EquippedLantern or Lanterns.DefaultId)
+
+-- the menu slides in from the right edge
+local menuTarget = menu.Position
+menu.Position = menuTarget + UDim2.fromOffset(240, 0)
+task.delay(0.5, function()
+	UIKit.tween(menu, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Position = menuTarget })
+end)

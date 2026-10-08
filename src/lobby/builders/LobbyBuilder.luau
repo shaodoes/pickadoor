@@ -44,8 +44,8 @@ local C = {
 	pipe = Color3.fromRGB(150, 96, 60), -- copper
 	cardboard = Color3.fromRGB(156, 118, 78),
 	brass = Color3.fromRGB(150, 112, 56),
-	warm = Color3.fromRGB(255, 166, 86),
-	bulb = Color3.fromRGB(255, 214, 160),
+	warm = Color3.fromRGB(255, 158, 78),
+	bulb = Color3.fromRGB(255, 172, 100), -- warm amber, not white
 	paint = Color3.fromRGB(214, 204, 182),
 	redPaint = Color3.fromRGB(150, 40, 32),
 	chalkboard = Color3.fromRGB(36, 48, 40),
@@ -140,31 +140,130 @@ local function prompt(part: BasePart, objectText: string, actionText: string, pa
 	return p
 end
 
--- Bare bulb hanging on a cord from the joists.
-local function bareBulb(parent: Instance, pos: Vector3, range: number, brightness: number, shadows: boolean)
-	local model = folder(parent, "Bulb")
+-- Hanging lamp: ceiling rose, braided cord, brass fitting, then either an enamel "shade" that
+-- throws a pool of light down, or a frosted "globe" that glows all round. `pos` is the bulb.
+-- Returns the model and the glowing core (which carries the PointLight).
+local GLOW = Color3.fromRGB(255, 128, 48) -- deep amber; Neon renders much paler than its colour
+local function bareBulb(
+	parent: Instance,
+	pos: Vector3,
+	range: number,
+	brightness: number,
+	shadows: boolean,
+	style: string?
+)
+	local model = folder(parent, "Lamp")
+	local vertical = CFrame.Angles(0, 0, math.rad(90)) -- cylinders run along X; roll them upright
+	local brass = Color3.fromRGB(140, 104, 56)
+	local fittingY = pos.Y + (style == "shade" and 1.0 or 0.85)
+	box(
+		model,
+		"Rose",
+		Vector3.new(0.2, 0.8, 0.8),
+		CFrame.new(pos.X, CEILING - 0.1, pos.Z) * vertical,
+		brass,
+		Enum.Material.Metal,
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		}
+	)
 	box(
 		model,
 		"Cord",
-		Vector3.new(0.08, CEILING - pos.Y, 0.08),
-		Vector3.new(pos.X, (CEILING + pos.Y) / 2, pos.Z),
-		Color3.fromRGB(20, 20, 20),
-		nil,
+		Vector3.new(0.07, CEILING - fittingY, 0.07),
+		Vector3.new(pos.X, (CEILING + fittingY) / 2, pos.Z),
+		Color3.fromRGB(30, 24, 20),
+		Enum.Material.Fabric,
 		DETAIL
 	)
 	box(
 		model,
-		"Socket",
-		Vector3.new(0.3, 0.35, 0.3),
-		pos + Vector3.new(0, 0.45, 0),
-		Color3.fromRGB(30, 28, 26),
+		"Fitting",
+		Vector3.new(0.4, 0.34, 0.34),
+		CFrame.new(pos.X, fittingY, pos.Z) * vertical,
+		brass,
 		Enum.Material.Metal,
-		DETAIL
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		}
 	)
-	local bulb = box(model, "Glass", Vector3.new(0.45, 0.6, 0.45), pos, C.bulb, Enum.Material.Neon, DETAIL)
-	bulb.Shape = Enum.PartType.Ball
-	pointLight(bulb, range, brightness, shadows)
-	return model, bulb
+
+	local core = box(model, "Core", Vector3.new(0.5, 0.5, 0.5), pos, GLOW, Enum.Material.Neon, DETAIL)
+	core.Shape = Enum.PartType.Ball
+	if style == "shade" then
+		-- stepped enamel cone, dark green outside, lit warm inside
+		local enamel = Color3.fromRGB(34, 56, 44)
+		for i, spec in { { 0.75, 0.7 }, { 0.52, 1.2 }, { 0.3, 1.7 }, { 0.1, 2.1 } } do
+			box(
+				model,
+				"Shade",
+				Vector3.new(i == 4 and 0.14 or 0.24, spec[2], spec[2]),
+				CFrame.new(pos + Vector3.new(0, spec[1], 0)) * vertical,
+				enamel,
+				Enum.Material.SmoothPlastic,
+				{
+					Shape = Enum.PartType.Cylinder,
+					CanCollide = false,
+					CanQuery = false,
+				}
+			)
+		end
+		box(
+			model,
+			"ShadeInner",
+			Vector3.new(0.05, 1.5, 1.5),
+			CFrame.new(pos + Vector3.new(0, 0.18, 0)) * vertical,
+			Color3.fromRGB(255, 196, 130),
+			Enum.Material.Neon,
+			{
+				Shape = Enum.PartType.Cylinder,
+				Transparency = 0.35,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			}
+		)
+		local spot = Instance.new("SpotLight")
+		spot.Face = Enum.NormalId.Bottom
+		spot.Angle = 115
+		spot.Range = range
+		spot.Brightness = brightness * 1.3
+		spot.Color = C.warm
+		spot.Shadows = shadows
+		spot.Parent = core
+		pointLight(core, range * 0.55, brightness * 0.35, false)
+	else
+		-- frosted glass globe around the glowing core
+		box(model, "Globe", Vector3.new(1.3, 1.3, 1.3), pos, Color3.fromRGB(255, 224, 182), Enum.Material.Glass, {
+			Shape = Enum.PartType.Ball,
+			Transparency = 0.45,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		})
+		box(
+			model,
+			"GlobeCollar",
+			Vector3.new(0.18, 0.6, 0.6),
+			CFrame.new(pos + Vector3.new(0, 0.66, 0)) * vertical,
+			brass,
+			Enum.Material.Metal,
+			{
+				Shape = Enum.PartType.Cylinder,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			}
+		)
+		pointLight(core, range, brightness, shadows)
+	end
+	return model, core
 end
 
 -- Wall-mounted caged work light (faces +Z of `cf`).
@@ -623,7 +722,7 @@ local function buildStairs(root: Instance)
 		Enum.Material.Wood,
 		DETAIL
 	)
-	bareBulb(stairs, Vector3.new(STAIR.x0 + 16, shaftTop - 2.5, zc), 26, 1.8, true)
+	bareBulb(stairs, Vector3.new(STAIR.x0 + 16, shaftTop - 2.5, zc), 26, 1.8, true, "globe")
 
 	-- clutter under the stairs
 	for i, spec in { { 6, 1.5, 0, 3 }, { 9.2, 1.25, -0.8, 2.5 }, { 6.4, 3.6, 0.2, 1.5 } } do
@@ -641,8 +740,8 @@ local function buildStairs(root: Instance)
 	spawnPoint.Name = "Spawn"
 	spawnPoint.Anchored = true
 	spawnPoint.Size = Vector3.new(4, 0.2, 4)
-	-- on the landing, facing -X so players look down the stairs into the basement
-	spawnPoint.CFrame = CFrame.new((xTop + HALF_X) / 2, CEILING + 0.1, zc) * CFrame.Angles(0, math.rad(90), 0)
+	-- at the foot of the stairs, clear of the stairwell walls
+	spawnPoint.CFrame = CFrame.new(STAIR.x0 + 3, 0.1, STAIR.z0 - 5) -- faces -Z, into the room toward the guide
 	spawnPoint.Transparency = 1
 	spawnPoint.CanCollide = false
 	spawnPoint.CanQuery = false
@@ -852,11 +951,11 @@ local function buildStacks(root: Instance)
 
 	-- bulbs down the walkway (with shadows) and over the bookcases
 	for _, z in { 38, 26, 14, 2, -10, -22 } do
-		bareBulb(stacks, Vector3.new(2.2, CEILING - 4.2, z), 18, 1.1, true)
+		bareBulb(stacks, Vector3.new(2.2, CEILING - 4.6, z), 20, 1.1, true, "shade")
 	end
 	for _, s in { -1, 1 } do
 		for _, z in { 26, 6, -16 } do
-			bareBulb(stacks, Vector3.new(s * 16, CEILING - 3.6, z), 15, 0.75, false)
+			bareBulb(stacks, Vector3.new(s * 16, CEILING - 3.6, z), 15, 0.8, false, "globe")
 		end
 	end
 
@@ -1090,7 +1189,7 @@ local function buildShop(root: Instance)
 	end
 	surfaceText(sign, Enum.NormalId.Right, "SHOP", Enum.Font.SpecialElite, Color3.fromRGB(40, 26, 18))
 	surfaceText(sign, Enum.NormalId.Left, "SHOP", Enum.Font.SpecialElite, Color3.fromRGB(40, 26, 18))
-	bareBulb(shop, Vector3.new(cx + 2.5, 9, cz - 3), 18, 1.2, true)
+	bareBulb(shop, Vector3.new(cx + 3, 9.5, cz + 5.5), 18, 1.2, true, "shade")
 	prompt(top, "Checkout Desk", "Browse Shop", "Shop")
 end
 
@@ -1824,7 +1923,7 @@ local function buildDoorWall(root: Instance)
 	dust.Parent = dustVolume
 
 	-- one bulb in front of the doors that won't stay on
-	local _, bulb = bareBulb(queue, Vector3.new(5, CEILING - 4.5, wallZ + 12), 22, 1.2, true)
+	local _, bulb = bareBulb(queue, Vector3.new(5, CEILING - 4.5, wallZ + 12), 22, 1.2, true, "globe")
 	bulb:FindFirstChildOfClass("PointLight"):SetAttribute("Flicker", "bulb")
 end
 
@@ -2051,9 +2150,9 @@ local function setupLighting()
 	cc.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.6
-	bloom.Size = 24
-	bloom.Threshold = 1.5
+	bloom.Intensity = 0.8
+	bloom.Size = 32
+	bloom.Threshold = 1.25 -- low enough that the amber lamp cores bloom into a soft halo
 	bloom.Parent = Lighting
 end
 

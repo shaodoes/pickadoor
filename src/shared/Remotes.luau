@@ -12,6 +12,7 @@ local DEFINITIONS = {
 	BuyLantern = "RemoteFunction",
 	EquipLantern = "RemoteFunction",
 	LeaveQueue = "RemoteEvent",
+	GuideSeen = "RemoteEvent", -- client -> server: finished the guide's introduction
 }
 
 function Remotes.setup()

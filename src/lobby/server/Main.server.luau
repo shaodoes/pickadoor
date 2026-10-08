@@ -22,6 +22,7 @@ LanternService.start()
 require(script.Parent.ShopService).start()
 require(script.Parent.QueueService).start(lobby)
 require(script.Parent.LeaderboardService).start(lobby)
+require(script.Parent.GuideService).start(lobby)
 
 -- Lights tagged with a "Flicker" attribute by the builder: the furnace breathes, one bulb won't stay on.
 task.spawn(function()
@@ -36,9 +37,17 @@ task.spawn(function()
 			if entry.kind == "furnace" then
 				entry.light.Brightness = entry.base * (0.8 + math.random() * 0.35)
 			elseif math.random() < 0.06 then
+				-- the glowing core goes dark with the light, so the lamp really blinks
+				local core = entry.light.Parent
 				entry.light.Brightness = 0
+				if core:IsA("BasePart") then
+					core.Transparency = 0.85
+				end
 				task.delay(0.05 + math.random() * 0.25, function()
 					entry.light.Brightness = entry.base
+					if core:IsA("BasePart") then
+						core.Transparency = 0
+					end
 				end)
 			end
 		end
