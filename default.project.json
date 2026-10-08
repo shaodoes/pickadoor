@@ -1,0 +1,21 @@
+{
+  "name": "Pickadoor-Lobby",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerStorage": {
+      "Common": { "$path": "src/server-common" },
+      "Builders": { "$path": "src/lobby/builders" }
+    },
+    "ServerScriptService": {
+      "Lobby": { "$path": "src/lobby/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Lobby": { "$path": "src/lobby/client" }
+      }
+    }
+  }
+}

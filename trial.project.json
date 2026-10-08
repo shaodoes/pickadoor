@@ -1,0 +1,21 @@
+{
+  "name": "Pickadoor-Trial",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerStorage": {
+      "Common": { "$path": "src/server-common" },
+      "Builders": { "$path": "src/trial/builders" }
+    },
+    "ServerScriptService": {
+      "Trial": { "$path": "src/trial/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Trial": { "$path": "src/trial/client" }
+      }
+    }
+  }
+}

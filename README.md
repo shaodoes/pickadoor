@@ -1,0 +1,32 @@
+# Pickadoor
+
+Roblox liminal horror game. Two doors, ten seconds, and the one you pick decides your fate for the next trial.
+
+## Toolchain
+- [Rokit](https://github.com/rojo-rbx/rokit) manages tools (`rokit.toml`): Rojo, StyLua, Selene. Run `rokit install`.
+- Roblox Studio's built-in MCP server is registered for Claude Code in `.mcp.json`.
+
+## Places
+| Project file | Place | Contents |
+|---|---|---|
+| `default.project.json` | Lobby | basement library, queue pads, shop, lanterns, leaderboard |
+| `trial.project.json` | Trial | Door Room + PICK A DOOR vote (trial maps come later) |
+
+```
+src/shared/         ReplicatedStorage.Shared   Config, Lanterns, Remotes, LanternBuilder, UIKit
+src/server-common/  ServerStorage.Common       DataService, Monetization, LanternService
+src/lobby/          Lobby scripts + builders/LobbyBuilder (procedural map)
+src/trial/          Trial scripts + builders/TrialBuilder
+```
+
+## Develop
+1. `rojo build default.project.json -o Lobby.rbxl` and open it in Studio (or open your place and `rojo serve`, then connect with the Rojo plugin).
+2. Bake the map into the place: in the command bar run
+   `require(game.ServerStorage.Builders.LobbyBuilder).build()`
+   (if you skip this, the server builds it on start).
+3. Press Play. In Studio, teleports are mocked and you get 1000 test Keys when DataStores are unavailable.
+
+## Before going live
+- Publish the experience; add a second place for the Trial and publish `trial.project.json` to it.
+- Fill in `Config.LobbyPlaceId`, `Config.TrialPlaceId`, `Config.ReviveGamePassId` (`src/shared/Config.luau`).
+- Game Settings > Security: enable Studio Access to API Services (DataStores) for testing saves.
