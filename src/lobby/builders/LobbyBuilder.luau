@@ -1006,7 +1006,6 @@ local function buildStacks(root: Instance)
 
 	for _, p in
 		{
-			Vector3.new(-5, 0, 26),
 			Vector3.new(6, 0, 10),
 			Vector3.new(-24, 0, 4),
 			Vector3.new(23, 0, -14),
