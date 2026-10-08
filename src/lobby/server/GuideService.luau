@@ -11,10 +11,10 @@ local DataService = require(ServerStorage.Common.DataService)
 
 local GuideService = {}
 
--- On the open walkway right in front of the stairs, beside a lectern, turned toward where players
--- arrive, so he's the first thing you see (his old spot was hidden behind a bookcase).
-local POSITION = Vector3.new(5, 0, 27)
-local FACING = Vector3.new(13, 0, 34)
+-- In the arrival foyer, at the top of the grand stair and just off the walkway, turned toward the
+-- spawn so he's the first thing you see when you come down from the house.
+local POSITION = Vector3.new(4.5, 6, 45.5)
+local FACING = Vector3.new(12, 6, 51)
 local IDLE_ANIMATION = "rbxassetid://507766666" -- default R15 idle
 
 local SKIN = Color3.fromRGB(196, 186, 172)
@@ -295,9 +295,9 @@ end
 -- A small reading lectern next to the guide: post, slanted top, an open book and a candle.
 local function lectern(parent: Instance, guide: Model)
 	local root = guide.HumanoidRootPart.CFrame
-	local base = CFrame.new((root * CFrame.new(-2.6, 0, -0.6)).Position)
-		* root.Rotation
-		* CFrame.Angles(0, math.rad(25), 0)
+	-- on the floor beside him (the root part is ~3 studs up; the lectern must stand on the floor)
+	local beside = (root * CFrame.new(2.6, 0, -0.6)).Position -- on his far side, clear of the stair approach
+	local base = CFrame.new(beside.X, POSITION.Y, beside.Z) * root.Rotation * CFrame.Angles(0, math.rad(25), 0)
 	local model = Instance.new("Model")
 	model.Name = "Lectern"
 	local function part(name, size, cf, color, material, extra)

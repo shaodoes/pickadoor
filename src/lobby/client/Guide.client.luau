@@ -15,7 +15,7 @@ local Sfx = require(Shared.Sfx)
 local UIKit = require(Shared.UIKit)
 
 local player = Players.LocalPlayer
-local Colors, Fonts = UIKit.Colors, UIKit.Fonts
+local Colors, Face = UIKit.Colors, UIKit.Face
 
 local LINES = {
 	"Oh. Another one found the stairs.",
@@ -76,92 +76,150 @@ end)
 ------------------------------------------------------------------------------------------
 local marker = UIKit.new("BillboardGui", {
 	Name = "NewMarker",
-	Size = UDim2.fromOffset(40, 50),
+	Size = UDim2.fromOffset(46, 46),
 	StudsOffset = Vector3.new(0, 3.6, 0),
 	AlwaysOnTop = true,
 	LightInfluence = 0,
 	Enabled = false,
 	Parent = head,
 })
-local bang = UIKit.label({
+-- a cream badge with a red ring and an ink "!", bobbing gently
+local bang = UIKit.new("TextLabel", {
 	Text = "!",
-	Font = Fonts.title,
+	FontFace = Face.bold,
 	TextScaled = true,
-	TextColor3 = Colors.goldBright,
-	TextStrokeTransparency = 0.3,
-	TextXAlignment = Enum.TextXAlignment.Center,
-	Size = UDim2.fromScale(1, 1),
+	TextColor3 = Colors.ink,
+	BackgroundColor3 = Colors.cream,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(36, 36),
 	Parent = marker,
+}, {
+	UIKit.corner(18),
+	UIKit.stroke(Colors.accent, 3),
+	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
 })
 RunService.RenderStepped:Connect(function()
 	if marker.Enabled then
-		bang.Position = UDim2.fromOffset(0, math.sin(os.clock() * 3) * 5)
+		bang.Position = UDim2.new(0.5, 0, 0.5, math.sin(os.clock() * 3) * 5)
 	end
 end)
 
 ------------------------------------------------------------------------------------------
--- Dialogue box
+-- Dialogue box: a sheet of cream paper with a red name tab, typewritten body text,
+-- progress pips and NEXT / SKIP. The whole box is a button (click anywhere to continue).
 ------------------------------------------------------------------------------------------
 local gui = UIKit.new("ScreenGui", {
 	Name = "GuideUI",
 	ResetOnSpawn = false,
 	DisplayOrder = 5,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	Parent = player:WaitForChild("PlayerGui"),
 })
 local box = UIKit.new("TextButton", {
 	Name = "Dialogue",
 	Text = "",
 	AutoButtonColor = false,
+	BackgroundTransparency = 1,
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -28),
-	Size = UDim2.fromOffset(760, 170),
-	BackgroundColor3 = Colors.panel,
-	BackgroundTransparency = 0.04,
+	Size = UDim2.fromOffset(760, 176),
 	Visible = false,
 	Parent = gui,
-}, { UIKit.corner(10), UIKit.stroke(Colors.gold, 2), UIKit.sheen() })
-local boxScale = UIKit.new("UIScale", { Parent = box })
-UIKit.label({
-	Text = "the librarian",
-	Font = Enum.Font.SpecialElite,
-	TextSize = 24,
-	TextColor3 = Colors.gold,
-	Position = UDim2.fromOffset(24, 12),
-	Size = UDim2.new(1, -48, 0, 28),
-	Parent = box,
 })
-local body = UIKit.label({
+local boxFit = UIKit.fit(box)
+UIKit.shadow(box, 16, 8, 1)
+local sheet = UIKit.new("Frame", {
+	Name = "Sheet",
+	BackgroundColor3 = Colors.paper,
+	BorderSizePixel = 0,
+	Size = UDim2.fromScale(1, 1),
+	ZIndex = 1,
+	Parent = box,
+}, { UIKit.corner(16), UIKit.stroke(Colors.ink, 2, 0.35), UIKit.sheen(0.35) })
+-- name tab hanging over the top edge
+UIKit.new("TextLabel", {
+	Name = "Speaker",
+	Text = "THE LIBRARIAN",
+	FontFace = Face.bold,
+	TextSize = 18,
+	TextColor3 = Colors.paperLight,
+	BackgroundColor3 = Colors.accent,
+	Position = UDim2.fromOffset(22, -16),
+	AutomaticSize = Enum.AutomaticSize.X,
+	Size = UDim2.fromOffset(0, 32),
+	ZIndex = 3,
+	Parent = sheet,
+}, {
+	UIKit.corner(8),
+	UIKit.stroke(Colors.accentDark, 1.5, 0.3),
+	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }),
+})
+local body = UIKit.new("TextLabel", {
+	Name = "Body",
 	Text = "",
-	Font = Fonts.body,
-	TextSize = 24,
+	BackgroundTransparency = 1,
+	FontFace = Face.serif,
+	TextSize = 21,
+	LineHeight = 1.15,
+	TextColor3 = Colors.ink,
 	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
 	TextYAlignment = Enum.TextYAlignment.Top,
-	Position = UDim2.fromOffset(24, 46),
-	Size = UDim2.new(1, -48, 1, -96),
-	Parent = box,
+	Position = UDim2.fromOffset(26, 30),
+	Size = UDim2.new(1, -52, 1, -86),
+	Parent = sheet,
 })
-local progress = UIKit.label({
-	Text = "",
-	Font = Fonts.ui,
-	TextSize = 16,
-	TextColor3 = Colors.muted,
-	Position = UDim2.new(0, 24, 1, -38),
-	Size = UDim2.fromOffset(120, 24),
-	Parent = box,
+-- one pip per line; the current one is red and wider
+local pips = UIKit.new("Frame", {
+	Name = "Progress",
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 26, 1, -32),
+	Size = UDim2.fromOffset(260, 10),
+	Parent = sheet,
+}, {
+	UIKit.new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}),
 })
+local pipFrames = {}
+for i = 1, #LINES do
+	pipFrames[i] = UIKit.new("Frame", {
+		LayoutOrder = i,
+		BackgroundColor3 = Colors.paperDark,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(8, 8),
+		Parent = pips,
+	}, { UIKit.corner(4) })
+end
 local nextButton = UIKit.button("NEXT", {
 	AnchorPoint = Vector2.new(1, 1),
-	Position = UDim2.new(1, -16, 1, -12),
-	Size = UDim2.fromOffset(110, 36),
-	Parent = box,
-})
+	Position = UDim2.new(1, -18, 1, -14),
+	Size = UDim2.fromOffset(118, 40),
+	ZIndex = 2,
+	Parent = sheet,
+}, { style = "ink", icon = "play", iconSize = 14 })
 local skipButton = UIKit.button("SKIP", {
 	AnchorPoint = Vector2.new(1, 1),
-	Position = UDim2.new(1, -136, 1, -12),
-	Size = UDim2.fromOffset(90, 36),
-	BackgroundColor3 = Colors.bg,
-	Parent = box,
-})
+	Position = UDim2.new(1, -148, 1, -14),
+	Size = UDim2.fromOffset(92, 40),
+	ZIndex = 2,
+	Parent = sheet,
+}, { style = "paper" })
+
+local function setProgress(index: number)
+	for i, pip in pipFrames do
+		local current = i == index
+		UIKit.tween(pip, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+			Size = UDim2.fromOffset(current and 22 or 8, 8),
+			BackgroundColor3 = current and Colors.accent or i < index and Colors.inkMuted or Colors.paperDark,
+		})
+	end
+end
 
 local talking = false
 local lineIndex = 0
@@ -174,11 +232,16 @@ local function finish()
 	end
 	talking = false
 	typeToken += 1
-	local t =
-		UIKit.tween(boxScale, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Scale = 0.9 })
+	Sfx.play("PanelClose", 0.04)
+	local t = UIKit.tween(
+		boxFit,
+		TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{ Scale = UIKit.fitScale() * 0.9 }
+	)
 	t.Completed:Connect(function()
 		if not talking then
 			box.Visible = false
+			boxFit.Scale = UIKit.fitScale()
 		end
 	end)
 	prompt.Enabled = true
@@ -193,7 +256,7 @@ local function showLine(index: number)
 	local text = LINES[index]
 	body.Text = text
 	body.MaxVisibleGraphemes = 0
-	progress.Text = string.format("%d / %d", index, #LINES)
+	setProgress(index)
 	nextButton.Text = index == #LINES and "CLOSE" or "NEXT"
 	typing = true
 	typeToken += 1
@@ -241,8 +304,10 @@ local function start()
 	talking = true
 	prompt.Enabled = false
 	box.Visible = true
-	boxScale.Scale = 0.9
-	UIKit.tween(boxScale, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Scale = 1 })
+	boxFit.Scale = UIKit.fitScale() * 0.9
+	UIKit.tween(boxFit, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Scale = UIKit.fitScale() })
+	sheet.Position = UDim2.fromOffset(0, 24)
+	UIKit.tween(sheet, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Position = UDim2.new() })
 	Sfx.play("PanelOpen", 0.04)
 	showLine(1)
 end

@@ -1,8 +1,12 @@
 -- Door wall VFX (client-only, so every player sees their own glitches):
 --   doors     light leaks from underneath and builds with the pad countdown; the door rattles
 --             near zero and swings open onto black when the party leaves
---   stencils  labels above the doors glitch to other words; the count pulses red in the last seconds
---   PICK A DOOR breathes a red glow, drips, and occasionally says something else
+--   plaques   titles above the doors glitch to other words (their shadow layer jumps with them);
+--             the count and its black strip pulse red in the last seconds
+--   PICK A DOOR breathes a red glow (light + overspray halo), drips, and occasionally says something
+--             else; every paint layer jumps off-register together
+-- Optional decoration from Signage is found by attribute: GUI children tagged SignLayer move/retext
+-- with the main label, SignHalo ones breathe. Anything missing is simply skipped.
 --   clock     the second hand ticks and slips back; while any pad counts down the hands run backwards
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -13,7 +17,6 @@ local lobby = workspace:WaitForChild("Lobby")
 local pads = lobby:WaitForChild("Pads")
 local queue = lobby:WaitForChild("Queue")
 
-local RED = Color3.fromRGB(150, 40, 32)
 local HOT_RED = Color3.fromRGB(230, 50, 40)
 
 local LABEL_GLITCHES = {
@@ -23,13 +26,47 @@ local LABEL_GLITCHES = {
 }
 local STENCIL_GLITCHES = { "ONLY ONE OPENS", "PICK ONE", "YOU ALREADY DID", "DON'T", "PICK  A  DOOR" }
 
--- Swap a label's text for a moment, nudged off-register like a misprint.
-local function glitch(label: TextLabel, options: { string }, original: string, basePosition: UDim2)
-	label.Text = options[math.random(#options)]
-	label.Position = basePosition + UDim2.fromOffset(math.random(-8, 8), math.random(-4, 4))
+-- Decorative layers that travel with a label: siblings tagged SignLayer, with their resting state.
+type Layer = { obj: GuiObject, pos: UDim2, text: string? }
+local function layersOf(label: TextLabel): { Layer }
+	local out = {}
+	local gui = label.Parent
+	if not gui then
+		return out
+	end
+	for _, child in gui:GetChildren() do
+		if child ~= label and child:IsA("GuiObject") and child:GetAttribute("SignLayer") then
+			table.insert(out, {
+				obj = child,
+				pos = child.Position,
+				text = if child:IsA("TextLabel") then child.Text else nil,
+			})
+		end
+	end
+	return out
+end
+
+-- Swap a label's text for a moment, nudged off-register like a misprint; its paint layers jump with it.
+local function glitch(label: TextLabel, options: { string }, original: string, basePosition: UDim2, layers: { Layer }?)
+	local word = options[math.random(#options)]
+	local offset = UDim2.fromOffset(math.random(-8, 8), math.random(-4, 4))
+	label.Text = word
+	label.Position = basePosition + offset
+	for _, layer in layers or {} do
+		layer.obj.Position = layer.pos + offset
+		if layer.text then
+			(layer.obj :: TextLabel).Text = word
+		end
+	end
 	task.delay(0.08 + math.random() * 0.2, function()
 		label.Text = original
 		label.Position = basePosition
+		for _, layer in layers or {} do
+			layer.obj.Position = layer.pos
+			if layer.text then
+				(layer.obj :: TextLabel).Text = layer.text
+			end
+		end
 	end)
 end
 
@@ -53,8 +90,12 @@ for _, pad in pads:GetChildren() do
 		title = title,
 		titleText = title.Text,
 		titlePos = title.Position,
+		titleLayers = layersOf(title),
 		status = status,
 		statusColor = status.TextColor3,
+		strip = gui:FindFirstChild("StatusStrip"), -- optional black strip behind the count
+		stripColor = gui:FindFirstChild("StatusStrip") and gui.StatusStrip.BackgroundColor3,
+		hot = false,
 		counter = pad:WaitForChild("Zone"):WaitForChild("Counter"),
 		shownCount = -1,
 		glitches = LABEL_GLITCHES[mode] or { "?" },
@@ -116,14 +157,23 @@ local function updateDoor(d, t: number, dt: number): number
 
 	-- the count pulses red in the last five seconds
 	if tension > 0 and timeLeft <= 5 then
-		d.status.TextColor3 = d.statusColor:Lerp(HOT_RED, (math.sin(t * 10) + 1) / 2)
-	else
+		local beat = (math.sin(t * 10) + 1) / 2
+		d.status.TextColor3 = d.statusColor:Lerp(HOT_RED, beat)
+		if d.strip then
+			d.strip.BackgroundColor3 = d.stripColor:Lerp(Color3.fromRGB(70, 8, 6), beat)
+		end
+		d.hot = true
+	elseif d.hot then
 		d.status.TextColor3 = d.statusColor
+		if d.strip then
+			d.strip.BackgroundColor3 = d.stripColor
+		end
+		d.hot = false
 	end
 
 	-- the label above glitches now and then, more often while someone is waiting
 	if t >= d.nextGlitch then
-		glitch(d.title, d.glitches, d.titleText, d.titlePos)
+		glitch(d.title, d.glitches, d.titleText, d.titlePos, d.titleLayers)
 		d.nextGlitch = t + (5 + math.random() * 14) / (1 + tension * 3)
 	end
 	return tension
@@ -137,13 +187,33 @@ local stencilLabel = stencil:WaitForChild("SurfaceGui"):WaitForChild("Label")
 local stencilGlow = stencil:WaitForChild("Glow")
 local stencilDrip = stencil:WaitForChild("Drip")
 local stencilText, stencilPos = stencilLabel.Text, stencilLabel.Position
+local stencilBaseColor = stencilLabel.TextColor3
+local stencilLayers = layersOf(stencilLabel)
 local nextStencilGlitch = os.clock() + 6
+
+-- overspray halo layers breathe with the glow (updated at ~15 Hz: plenty for a slow pulse)
+local halos = {}
+for _, layer in stencilLayers do
+	local base = layer.obj:GetAttribute("SignHalo")
+	if typeof(base) == "number" and layer.obj:IsA("TextLabel") then
+		table.insert(halos, { label = layer.obj, base = base })
+	end
+end
+local nextHaloUpdate = 0
 
 local function updateStencil(t: number, tension: number)
 	local pulse = (math.sin(t * 0.9) + 1) / 2
 	stencilGlow.Brightness = 0.15 + pulse * 0.3 + tension * 0.8
-	stencilLabel.TextColor3 = RED:Lerp(HOT_RED, pulse * 0.5 + tension * 0.5)
+	stencilLabel.TextColor3 = stencilBaseColor:Lerp(HOT_RED, pulse * 0.35 + tension * 0.5)
 	stencilDrip.Rate = 1.2 + tension * 6
+	if t >= nextHaloUpdate and #halos > 0 then
+		nextHaloUpdate = t + 1 / 15
+		-- denser mist at the peak of each breath and as the countdown runs out
+		local thicken = math.clamp(pulse * 0.5 + tension * 0.6, 0, 1)
+		for _, h in halos do
+			h.label.TextTransparency = h.base - (h.base - 0.6) * thicken * 0.5
+		end
+	end
 	if t >= nextStencilGlitch then
 		if math.random() < 0.3 then
 			-- a quick flicker instead of different words
@@ -152,7 +222,7 @@ local function updateStencil(t: number, tension: number)
 				stencilLabel.TextTransparency = 0
 			end)
 		else
-			glitch(stencilLabel, STENCIL_GLITCHES, stencilText, stencilPos)
+			glitch(stencilLabel, STENCIL_GLITCHES, stencilText, stencilPos, stencilLayers)
 		end
 		nextStencilGlitch = t + (8 + math.random() * 14) / (1 + tension * 2)
 	end

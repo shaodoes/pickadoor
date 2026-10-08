@@ -39,6 +39,25 @@ def long_string(text):
     return "[" + eq + "[\n" + text + "]" + eq + "]"
 
 
+def emit_directory(out, directory, var, depth):
+    """Mirror one directory's scripts into the instance `var`; subdirectories become Folders (as in Rojo)."""
+    indent = "\t" * depth
+    for filename in sorted(os.listdir(directory)):
+        path = os.path.join(directory, filename)
+        if os.path.isdir(path):
+            child = "dir%d" % depth
+            out.append('%sdo local %s = ensure(%s, "%s", "Folder")' % (indent, child, var, filename))
+            emit_directory(out, path, child, depth + 1)
+            out.append("%send" % indent)
+            continue
+        name, class_name = kind(filename)
+        if not name:
+            continue
+        source = open(path, encoding="utf-8").read().replace("\r\n", "\n")
+        out.append('%sensure(%s, "%s", "%s").Source = %s' % (indent, var, name, class_name, long_string(source)))
+        out.append("%scount += 1" % indent)
+
+
 def main():
     project = sys.argv[1] if len(sys.argv) > 1 else "default"
     tree = json.load(open(os.path.join(ROOT, project + ".project.json"), encoding="utf-8"))["tree"]
@@ -57,14 +76,7 @@ def main():
         out.append('\tlocal node = game:GetService("%s")' % service)
         for name in inst_path[1:]:
             out.append('\tnode = node:FindFirstChild("%s") or ensure(node, "%s", "Folder")' % (name, name))
-        directory = os.path.join(ROOT, fs_path)
-        for filename in sorted(os.listdir(directory)):
-            name, class_name = kind(filename)
-            if not name:
-                continue
-            source = open(os.path.join(directory, filename), encoding="utf-8").read().replace("\r\n", "\n")
-            out.append('\tensure(node, "%s", "%s").Source = %s' % (name, class_name, long_string(source)))
-            out.append("\tcount += 1")
+        emit_directory(out, os.path.join(ROOT, fs_path), "node", 1)
         out.append("end")
     out.append('print(("synced %d scripts"):format(count))')
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to a legacy codepage
