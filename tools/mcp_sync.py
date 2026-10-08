@@ -67,6 +67,7 @@ def main():
             out.append("\tcount += 1")
         out.append("end")
     out.append('print(("synced %d scripts"):format(count))')
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to a legacy codepage
     sys.stdout.write("\n".join(out) + "\n")
 
 

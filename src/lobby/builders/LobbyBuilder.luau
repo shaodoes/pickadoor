@@ -1,7 +1,8 @@
 --[[
-	Builds the lobby: a basement that someone turned into a library. Low joist ceiling, pipes and
-	ducts, concrete floor, painted cinderblock, steel posts, bare bulbs. Bookcases and metal racks
-	of boxed books. Six mismatched doors set into the back wall that shouldn't be there.
+	Builds the lobby: a small basement that someone turned into a library, mostly open floor.
+	Low joist ceiling, pipes and ducts, concrete floor, painted cinderblock, steel posts, bare bulbs.
+	Its windows look out onto something that can't be there: an endless flooded natatorium of
+	tiled vaults, lit cold and still.
 
 	Run from the Studio command bar (or MCP) to bake it into the place:
 		require(game.ServerStorage.Builders.LobbyBuilder).build()
@@ -9,10 +10,10 @@
 
 	Layout (top-down, +Z is the front, -Z is the door wall):
 		front-right   open wooden stairs down from the ground-floor door (spawn on the landing)
-		front-left    checkout desk + card catalogs (Shop)
-		left wall     workbench + pegboard of lanterns (Lanterns); reading nook at the back
-		right wall    chalkboard leaderboard; furnace + water heater at the back
-		middle        rug-covered walkway under the steel girder; rows of bookcases and racks
+		front-left    checkout desk + card catalog (Shop)
+		left wall     three big windows onto the natatorium; reading nook by the back window
+		right wall    pegboard workbench (Lanterns), chalkboard leaderboard, furnace at the back
+		middle        open floor, rugs, a few bookcases under the steel girder
 		back wall     Wing A (Solo/Duo/Squad) | clock + "PICK A DOOR" stencil | Wing B
 ]]
 local Lighting = game:GetService("Lighting")
@@ -25,7 +26,9 @@ local LanternBuilder = require(Shared.LanternBuilder)
 
 local LobbyBuilder = {}
 
-local HALF_X, HALF_Z, CEILING = 50, 70, 16
+-- Interior half-extents. Walls are WALL thick, so the outer shell sits on the 4-stud terrain grid
+-- (HALF + WALL must be a multiple of 4) and the natatorium water hugs the walls cleanly.
+local HALF_X, HALF_Z, CEILING, WALL = 36, 48, 16, 4
 
 local C = {
 	concrete = Color3.fromRGB(104, 98, 90),
@@ -46,7 +49,11 @@ local C = {
 	paint = Color3.fromRGB(214, 204, 182),
 	redPaint = Color3.fromRGB(150, 40, 32),
 	chalkboard = Color3.fromRGB(36, 48, 40),
-	window = Color3.fromRGB(110, 140, 190),
+	-- natatorium
+	tile = Color3.fromRGB(118, 146, 146),
+	tileDeep = Color3.fromRGB(40, 70, 74),
+	coldLight = Color3.fromRGB(140, 190, 200),
+	glass = Color3.fromRGB(170, 200, 205),
 }
 
 local BOOK_COLORS = {
@@ -82,6 +89,7 @@ end
 
 -- Non-colliding detail part that doesn't cast shadows (books, trim, small props).
 local DETAIL = { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
+local INVISIBLE = { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
 
 local function folder(parent: Instance, name: string)
 	local f = Instance.new("Model")
@@ -181,15 +189,126 @@ local function cagedLight(parent: Instance, cf: CFrame, range: number, brightnes
 	return model
 end
 
+-- Frame on a side wall: local +X points into the room, local Z runs along the wall, origin on the floor.
+local function wallFrame(side: number, along: number): CFrame
+	if side < 0 then
+		return CFrame.new(-HALF_X, 0, along)
+	end
+	return CFrame.new(HALF_X, 0, along) * CFrame.Angles(0, math.pi, 0)
+end
+
 ------------------------------------------------------------------------------------------
--- Shell: concrete floor, cinderblock walls, joists, girder + posts, ducts, pipes, stairwell
+-- Shell: concrete floor, cinderblock walls with windows, joists, girder + posts, ducts, pipes
 ------------------------------------------------------------------------------------------
-local STAIR = { x0 = 24, x1 = 50, z0 = 60, z1 = HALF_Z } -- opening in the ceiling over the stairs
+local STAIR = { x0 = HALF_X - 26, x1 = HALF_X, z0 = HALF_Z - 10, z1 = HALF_Z } -- ceiling opening over the stairs
+
+-- Windows per side wall: sill and head heights, then z centre + width. Left = big views, right = high slits.
+local WINDOWS = {
+	[-1] = { y0 = 5, y1 = 11, list = { { z = -18, w = 10 }, { z = 6, w = 10 }, { z = 30, w = 10 } } },
+	[1] = { y0 = 11, y1 = 14, list = { { z = -12, w = 6 }, { z = 13, w = 6 } } },
+}
+
+-- A side wall (x = ±HALF_X) built in pieces around its window openings (list sorted by z).
+local function sideWall(parent: Instance, side: number)
+	local spec = WINDOWS[side]
+	local wallH = CEILING + 1
+	local x = side * (HALF_X + WALL / 2)
+	local zMin, zMax = -HALF_Z - WALL, HALF_Z + WALL
+	local function piece(y0, y1, z0, z1)
+		if y1 > y0 and z1 > z0 then
+			box(
+				parent,
+				"Wall",
+				Vector3.new(WALL, y1 - y0, z1 - z0),
+				Vector3.new(x, (y0 + y1) / 2, (z0 + z1) / 2),
+				C.block,
+				Enum.Material.Brick
+			)
+		end
+	end
+	piece(0, spec.y0, zMin, zMax)
+	piece(spec.y1, wallH, zMin, zMax)
+	local cursor = zMin
+	for _, w in spec.list do
+		piece(spec.y0, spec.y1, cursor, w.z - w.w / 2)
+		cursor = w.z + w.w / 2
+	end
+	piece(spec.y0, spec.y1, cursor, zMax)
+
+	-- glass, a mullion cross and a deep sill in each opening; cold light from outside
+	local h = spec.y1 - spec.y0
+	local yc = (spec.y0 + spec.y1) / 2
+	local mid = side * (HALF_X + WALL / 2)
+	for _, w in spec.list do
+		local glass = box(
+			parent,
+			"WindowGlass",
+			Vector3.new(0.2, h, w.w),
+			Vector3.new(mid, yc, w.z),
+			C.glass,
+			Enum.Material.SmoothPlastic,
+			{
+				Transparency = 0.82,
+				CastShadow = false,
+			}
+		)
+		box(
+			parent,
+			"Mullion",
+			Vector3.new(0.3, h, 0.3),
+			Vector3.new(mid - side * 0.2, yc, w.z),
+			C.darkWood,
+			Enum.Material.Wood,
+			DETAIL
+		)
+		box(
+			parent,
+			"Transom",
+			Vector3.new(0.3, 0.3, w.w),
+			Vector3.new(mid - side * 0.2, yc, w.z),
+			C.darkWood,
+			Enum.Material.Wood,
+			DETAIL
+		)
+		box(
+			parent,
+			"Sill",
+			Vector3.new(WALL + 0.6, 0.3, w.w + 0.6),
+			Vector3.new(mid - side * 0.3, spec.y0 - 0.15, w.z),
+			C.wood,
+			Enum.Material.Wood
+		)
+		box(
+			parent,
+			"FrameTop",
+			Vector3.new(0.5, 0.4, w.w + 0.6),
+			Vector3.new(side * (HALF_X - 0.1), spec.y1 + 0.1, w.z),
+			C.darkWood,
+			Enum.Material.Wood,
+			DETAIL
+		)
+		local light = Instance.new("SurfaceLight")
+		light.Face = side < 0 and Enum.NormalId.Right or Enum.NormalId.Left
+		light.Color = C.coldLight
+		light.Brightness = side < 0 and 0.9 or 0.5
+		light.Range = 18
+		light.Angle = 80
+		light.Shadows = true
+		light.Parent = glass
+	end
+end
 
 local function buildShell(root: Instance)
 	local shell = folder(root, "Shell")
 	local W, D = HALF_X * 2, HALF_Z * 2
-	box(shell, "Floor", Vector3.new(W + 4, 2, D + 4), Vector3.new(0, -1, 0), C.concrete, Enum.Material.Concrete)
+	box(
+		shell,
+		"Floor",
+		Vector3.new(W + WALL * 2, 2, D + WALL * 2),
+		Vector3.new(0, -1, 0),
+		C.concrete,
+		Enum.Material.Concrete
+	)
 
 	-- ceiling with a hole for the stairwell
 	local function ceiling(x0, x1, z0, z1)
@@ -202,25 +321,20 @@ local function buildShell(root: Instance)
 			Enum.Material.WoodPlanks
 		)
 	end
-	ceiling(-HALF_X - 2, STAIR.x0, -HALF_Z - 2, HALF_Z + 2)
-	ceiling(STAIR.x0, HALF_X + 2, -HALF_Z - 2, STAIR.z0)
+	local ox, oz = HALF_X + WALL, HALF_Z + WALL
+	ceiling(-ox, STAIR.x0, -oz, oz)
+	ceiling(STAIR.x0, ox, -oz, STAIR.z0)
 
-	-- cinderblock walls with a grime band and a few water stains
+	-- side walls with windows, plain front/back walls, grime band, a few water stains
 	local wallH = CEILING + 1
+	sideWall(shell, -1)
+	sideWall(shell, 1)
 	for _, s in { -1, 1 } do
 		box(
 			shell,
-			"WallX",
-			Vector3.new(2, wallH, D + 4),
-			Vector3.new(s * (HALF_X + 1), wallH / 2, 0),
-			C.block,
-			Enum.Material.Brick
-		)
-		box(
-			shell,
 			"WallZ",
-			Vector3.new(W + 4, wallH, 2),
-			Vector3.new(0, wallH / 2, s * (HALF_Z + 1)),
+			Vector3.new(W + WALL * 2, wallH, WALL),
+			Vector3.new(0, wallH / 2, s * (HALF_Z + WALL / 2)),
 			C.block,
 			Enum.Material.Brick
 		)
@@ -243,12 +357,12 @@ local function buildShell(root: Instance)
 			DETAIL
 		)
 	end
-	for _, spec in { { -1, 22, 5 }, { -1, -12, 3 }, { 1, 0, 4 }, { 1, -52, 6 } } do
+	for _, spec in { { -1, 18, 3 }, { -1, -6, 2.5 }, { 1, 30, 3 }, { 1, -30, 4 } } do
 		box(
 			shell,
 			"WaterStain",
-			Vector3.new(0.1, spec[3] * 1.6, spec[3]),
-			Vector3.new(spec[1] * (HALF_X - 0.05), CEILING - spec[3] * 0.8, spec[2]),
+			Vector3.new(0.1, spec[3] * 1.4, spec[3]),
+			Vector3.new(spec[1] * (HALF_X - 0.05), CEILING - spec[3] * 0.7, spec[2]),
 			Color3.fromRGB(90, 84, 70),
 			Enum.Material.Concrete,
 			{
@@ -294,7 +408,7 @@ local function buildShell(root: Instance)
 		Enum.Material.Metal,
 		DETAIL
 	)
-	for _, z in { 50, 26, 2, -22, -46 } do
+	for _, z in { 30, 8, -14 } do
 		box(
 			shell,
 			"LallyColumn",
@@ -322,13 +436,13 @@ local function buildShell(root: Instance)
 	box(
 		shell,
 		"Duct",
-		Vector3.new(3.2, 2, D - 30),
-		Vector3.new(-9, CEILING - 2.2, -15),
+		Vector3.new(3.2, 2, D - 20),
+		Vector3.new(-9, CEILING - 2.2, -10),
 		C.duct,
 		Enum.Material.Metal,
 		{ CanCollide = false }
 	)
-	for z = -40, 50, 15 do
+	for z = -40, 30, 14 do
 		box(
 			shell,
 			"DuctSeam",
@@ -342,17 +456,18 @@ local function buildShell(root: Instance)
 	box(
 		shell,
 		"DuctBranch",
-		Vector3.new(28, 1.6, 2.4),
-		Vector3.new(-25, CEILING - 2.2, 10),
+		Vector3.new(22, 1.6, 2.4),
+		Vector3.new(-21, CEILING - 2.2, 12),
 		C.duct,
 		Enum.Material.Metal,
 		DETAIL
 	)
+	local pipeX = HALF_X - 8
 	for _, spec in
 		{
 			{ 9, CEILING - 1.8, 0.8, C.pipe, HALF_Z },
 			{ 10.4, CEILING - 1.7, 0.5, C.pipe, HALF_Z },
-			{ 30, CEILING - 1.6, 1.1, C.steel, STAIR.z0 - 1 }, -- turns up into the floor above before the stairwell
+			{ pipeX, CEILING - 1.6, 1.1, C.steel, STAIR.z0 - 1 }, -- turns up into the floor above before the stairwell
 		}
 	do
 		local zEnd = spec[5]
@@ -373,8 +488,8 @@ local function buildShell(root: Instance)
 	box(
 		shell,
 		"PipeElbow",
-		Vector3.new(0.9 + 1.1, 1.1, 1.1),
-		CFrame.new(30, CEILING - 0.9, STAIR.z0 - 1) * CFrame.Angles(0, 0, math.rad(90)),
+		Vector3.new(2, 1.1, 1.1),
+		CFrame.new(pipeX, CEILING - 0.9, STAIR.z0 - 1) * CFrame.Angles(0, 0, math.rad(90)),
 		C.steel,
 		Enum.Material.Metal,
 		{
@@ -387,7 +502,7 @@ local function buildShell(root: Instance)
 		shell,
 		"BackPipe",
 		Vector3.new(W, 0.7, 0.7),
-		CFrame.new(0, CEILING - 1.7, -HALF_Z + 0.8),
+		CFrame.new(0, CEILING - 1.2, -HALF_Z + 0.8),
 		C.pipe,
 		Enum.Material.Metal,
 		{
@@ -395,40 +510,6 @@ local function buildShell(root: Instance)
 			CanCollide = false,
 		}
 	)
-
-	-- window wells high on both side walls: thin cold moonlight against the warm bulbs
-	for _, s in { -1, 1 } do
-		for _, z in { -36, 22 } do
-			local glass = box(
-				shell,
-				"WindowWell",
-				Vector3.new(0.3, 2.2, 5),
-				Vector3.new(s * (HALF_X - 0.15), CEILING - 2, z),
-				C.window,
-				Enum.Material.Glass,
-				{
-					Transparency = 0.2,
-					CanCollide = false,
-				}
-			)
-			box(
-				shell,
-				"WindowFrame",
-				Vector3.new(0.5, 2.8, 5.6),
-				Vector3.new(s * (HALF_X - 0.05), CEILING - 2, z),
-				C.darkWood,
-				Enum.Material.Wood,
-				DETAIL
-			)
-			local light = Instance.new("SurfaceLight")
-			light.Face = s < 0 and Enum.NormalId.Right or Enum.NormalId.Left
-			light.Color = Color3.fromRGB(120, 150, 215)
-			light.Brightness = 0.7
-			light.Range = 14
-			light.Angle = 70
-			light.Parent = glass
-		end
-	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -436,7 +517,7 @@ end
 ------------------------------------------------------------------------------------------
 local function buildStairs(root: Instance)
 	local stairs = folder(root, "Stairs")
-	local zA, zB = 62, 68 -- tread width
+	local zA, zB = STAIR.z0 + 2, STAIR.z1 - 2 -- tread width
 	local zc = (zA + zB) / 2
 	local steps, run = 15, 1.2
 	local xBottom = STAIR.x0 + 2
@@ -489,43 +570,39 @@ local function buildStairs(root: Instance)
 
 	-- the stairwell shaft above the ceiling, lit from the house upstairs
 	local shaftTop = CEILING + 12
+	local sx, sz = (STAIR.x0 + HALF_X) / 2 + 1, (STAIR.z0 + STAIR.z1) / 2
+	local sw, sd, sh = HALF_X - STAIR.x0 + 2, STAIR.z1 - STAIR.z0 + 2, shaftTop - CEILING
+	local sy = (CEILING + shaftTop) / 2
 	box(
 		stairs,
 		"ShaftWall",
-		Vector3.new(HALF_X - STAIR.x0 + 2, shaftTop - CEILING, 1),
-		Vector3.new((STAIR.x0 + HALF_X) / 2 + 1, (CEILING + shaftTop) / 2, STAIR.z0 - 0.5),
+		Vector3.new(sw, sh, 1),
+		Vector3.new(sx, sy, STAIR.z0 - 0.5),
 		C.block,
 		Enum.Material.Plaster
 	)
 	box(
 		stairs,
 		"ShaftWall",
-		Vector3.new(1, shaftTop - CEILING, STAIR.z1 - STAIR.z0 + 2),
-		Vector3.new(STAIR.x0 - 0.5, (CEILING + shaftTop) / 2, (STAIR.z0 + STAIR.z1) / 2),
+		Vector3.new(sw, sh, 1),
+		Vector3.new(sx, sy, STAIR.z1 + 0.5),
 		C.block,
 		Enum.Material.Plaster
 	)
 	box(
 		stairs,
 		"ShaftWall",
-		Vector3.new(1, shaftTop - CEILING, STAIR.z1 - STAIR.z0 + 2),
-		Vector3.new(HALF_X + 0.5, (CEILING + shaftTop) / 2, (STAIR.z0 + STAIR.z1) / 2),
+		Vector3.new(1, sh, sd),
+		Vector3.new(STAIR.x0 - 0.5, sy, sz),
 		C.block,
 		Enum.Material.Plaster
 	)
-	box(
-		stairs,
-		"ShaftWall",
-		Vector3.new(HALF_X - STAIR.x0 + 2, shaftTop - CEILING, 1),
-		Vector3.new((STAIR.x0 + HALF_X) / 2 + 1, (CEILING + shaftTop) / 2, STAIR.z1 + 0.5),
-		C.block,
-		Enum.Material.Plaster
-	)
+	box(stairs, "ShaftWall", Vector3.new(1, sh, sd), Vector3.new(HALF_X + 0.5, sy, sz), C.block, Enum.Material.Plaster)
 	box(
 		stairs,
 		"ShaftCeiling",
-		Vector3.new(HALF_X - STAIR.x0 + 2, 1, STAIR.z1 - STAIR.z0 + 2),
-		Vector3.new((STAIR.x0 + HALF_X) / 2 + 1, shaftTop + 0.5, (STAIR.z0 + STAIR.z1) / 2),
+		Vector3.new(sw, 1, sd),
+		Vector3.new(sx, shaftTop + 0.5, sz),
 		C.block,
 		Enum.Material.Plaster
 	)
@@ -546,15 +623,15 @@ local function buildStairs(root: Instance)
 		Enum.Material.Wood,
 		DETAIL
 	)
-	bareBulb(stairs, Vector3.new(40, shaftTop - 2.5, zc), 26, 1.8, true)
+	bareBulb(stairs, Vector3.new(STAIR.x0 + 16, shaftTop - 2.5, zc), 26, 1.8, true)
 
 	-- clutter under the stairs
-	for i, spec in { { 30, 1.5, 65, 3 }, { 33.2, 1.25, 64.2, 2.5 }, { 30.4, 3.6, 65.2, 1.5 } } do
+	for i, spec in { { 6, 1.5, 0, 3 }, { 9.2, 1.25, -0.8, 2.5 }, { 6.4, 3.6, 0.2, 1.5 } } do
 		box(
 			stairs,
 			"Box",
 			Vector3.new(spec[4], spec[4], spec[4]),
-			CFrame.new(spec[1], spec[2], spec[3]) * CFrame.Angles(0, math.rad(i * 13), 0),
+			CFrame.new(STAIR.x0 + spec[1], spec[2], zc + spec[3]) * CFrame.Angles(0, math.rad(i * 13), 0),
 			C.cardboard,
 			Enum.Material.Cardboard
 		)
@@ -575,7 +652,7 @@ local function buildStairs(root: Instance)
 end
 
 ------------------------------------------------------------------------------------------
--- Shelving: wooden bookcases and metal racks of boxed books
+-- Shelving: a few wooden bookcases and a rack of boxed books
 ------------------------------------------------------------------------------------------
 local function fillBooks(parent: Instance, at, length: number, y: number, zCenter: number, depth: number)
 	local x = -length / 2 + 0.2
@@ -656,7 +733,6 @@ local function bookcase(
 			fillBooks(unit, at, length, y0, 0.25, depth - 0.7)
 		end
 	end
-	-- odd things on top: a box, a book pile
 	if rng:NextNumber() > 0.4 then
 		box(
 			unit,
@@ -714,8 +790,7 @@ local function metalRack(parent: Instance, cf: CFrame, length: number, height: n
 					DETAIL
 				)
 			elseif roll < 0.85 then
-				local pile = rng:NextInteger(2, 5)
-				for k = 1, pile do
+				for k = 1, rng:NextInteger(2, 5) do
 					box(
 						unit,
 						"Book",
@@ -751,67 +826,43 @@ end
 
 local function buildStacks(root: Instance)
 	local stacks = folder(root, "Stacks")
-	-- rows either side of the walkway; bookcases and racks alternate irregularly
-	local function row(x: number, z: number)
-		local cf = CFrame.new(x, 0, z)
-		if rng:NextNumber() < 0.68 then
-			bookcase(stacks, cf, 13, 9.4, 3, true)
-		else
-			metalRack(stacks, cf, 13, 8, 2.6)
-		end
-	end
+	-- only four freestanding bookcases; the floor stays mostly open
 	for _, s in { -1, 1 } do
-		for _, z in { 44, 32, 20, 8, -4, -16 } do
-			row(s * 15, z)
-		end
-		for _, z in { 26, 14, 2 } do
-			row(s * 33, z)
-		end
+		bookcase(stacks, CFrame.new(s * 16, 0, 18), 12, 9.4, 3, true)
+		bookcase(stacks, CFrame.new(s * 16, 0, -6), 12, 9.4, 3, true)
 	end
-	-- single-sided bookcases against the walls
-	local faceRight, faceLeft, faceBack =
-		CFrame.Angles(0, math.rad(90), 0), CFrame.Angles(0, math.rad(-90), 0), CFrame.Angles(0, math.rad(180), 0)
-	bookcase(stacks, CFrame.new(-HALF_X + 1.4, 0, 14) * faceRight, 22, 11, 2.4, false)
-	bookcase(stacks, CFrame.new(HALF_X - 1.4, 0, 10) * faceLeft, 20, 11, 2.4, false)
-	bookcase(stacks, CFrame.new(-6, 0, HALF_Z - 1.4) * faceBack, 16, 11, 2.4, false)
-	metalRack(stacks, CFrame.new(10, 0, HALF_Z - 1.6) * faceBack, 10, 8, 2.4)
+	-- against the walls: between the big windows, and along the front wall
+	local faceRight, faceBack = CFrame.Angles(0, math.rad(90), 0), CFrame.Angles(0, math.rad(180), 0)
+	bookcase(stacks, CFrame.new(-HALF_X + 1.4, 0, 18) * faceRight, 12, 11, 2.4, false)
+	bookcase(stacks, CFrame.new(-HALF_X + 1.4, 0, -6) * faceRight, 12, 11, 2.4, false)
+	bookcase(stacks, CFrame.new(-12, 0, HALF_Z - 1.4) * faceBack, 12, 11, 2.4, false)
+	metalRack(stacks, CFrame.new(1, 0, HALF_Z - 1.6) * faceBack, 9, 8, 2.4)
 
 	for _, p in
 		{
-			Vector3.new(-6, 0, 38),
-			Vector3.new(7, 0, 14),
-			Vector3.new(-24, 0, 26),
-			Vector3.new(24, 0, -10),
-			Vector3.new(-7, 0, -22),
-			Vector3.new(41, 0, 20),
+			Vector3.new(-5, 0, 26),
+			Vector3.new(6, 0, 10),
+			Vector3.new(-24, 0, 4),
+			Vector3.new(23, 0, -14),
+			Vector3.new(-6, 0, -20),
 		}
 	do
 		bookPile(stacks, p, rng:NextInteger(3, 7))
 	end
 
-	-- bulbs: down the walkway (with shadows) and over the gaps between rows
-	for _, z in { 56, 44, 32, 20, 8, -4, -16, -28 } do
-		bareBulb(stacks, Vector3.new(2.2, CEILING - 4.2, z + 6), 18, 1.1, true)
+	-- bulbs down the walkway (with shadows) and over the bookcases
+	for _, z in { 38, 26, 14, 2, -10, -22 } do
+		bareBulb(stacks, Vector3.new(2.2, CEILING - 4.2, z), 18, 1.1, true)
 	end
 	for _, s in { -1, 1 } do
-		for _, z in { 38, 14, -10 } do
-			bareBulb(stacks, Vector3.new(s * 15, CEILING - 3.6, z), 15, 0.8, false)
-		end
-		for _, z in { 20, 8 } do
-			bareBulb(stacks, Vector3.new(s * 33, CEILING - 3.6, z), 14, 0.7, false)
+		for _, z in { 26, 6, -16 } do
+			bareBulb(stacks, Vector3.new(s * 16, CEILING - 3.6, z), 15, 0.75, false)
 		end
 	end
 
 	-- worn rugs overlapping down the walkway
 	for i, spec in
-		{
-			{ 50, 9, 12, 0.05 },
-			{ 34, 8, 14, -0.04 },
-			{ 16, 9, 12, 0.03 },
-			{ -2, 8, 13, -0.06 },
-			{ -20, 9, 12, 0.04 },
-			{ -36, 8, 12, 0 },
-		}
+		{ { 32, 9, 12, 0.05 }, { 17, 8, 13, -0.04 }, { 2, 9, 12, 0.03 }, { -13, 8, 12, -0.06 }, { -27, 9, 11, 0.04 } }
 	do
 		local color = (i % 2 == 0) and Color3.fromRGB(78, 34, 28) or Color3.fromRGB(88, 64, 40)
 		box(
@@ -936,7 +987,7 @@ end
 ------------------------------------------------------------------------------------------
 local function buildShop(root: Instance)
 	local shop = folder(root, "Shop")
-	local cx, cz = -30, 56
+	local cx, cz = -24, 36
 	-- old wooden desk used as a checkout counter, facing the walkway (+X)
 	box(shop, "DeskBody", Vector3.new(3, 3.4, 10), Vector3.new(cx, 1.7, cz), C.wood, Enum.Material.Wood)
 	local top =
@@ -987,7 +1038,6 @@ local function buildShop(root: Instance)
 			)
 		end
 	end
-	-- desk clutter: cash box, bell, ledger, lamp
 	box(
 		shop,
 		"CashBox",
@@ -1046,69 +1096,47 @@ end
 
 local function buildWorkbench(root: Instance)
 	local bench = folder(root, "LanternBench")
-	local wx, cz = -HALF_X, 40
-	local benchX = wx + 2.2
-	-- heavy workbench against the left wall
-	local top =
-		box(bench, "Top", Vector3.new(4, 0.5, 12), Vector3.new(benchX, 3.25, cz), C.midWood, Enum.Material.WoodPlanks)
+	local frame = wallFrame(1, 26) -- right wall
+	local function at(dx, y, dz)
+		return frame * CFrame.new(dx, y, dz)
+	end
+	-- heavy workbench against the wall
+	local top = box(bench, "Top", Vector3.new(4, 0.5, 12), at(2.2, 3.25, 0), C.midWood, Enum.Material.WoodPlanks)
 	for _, dz in { -5.6, 5.6 } do
 		for _, dx in { -1.6, 1.6 } do
-			box(
-				bench,
-				"Leg",
-				Vector3.new(0.5, 3, 0.5),
-				Vector3.new(benchX + dx, 1.5, cz + dz),
-				C.darkWood,
-				Enum.Material.Wood
-			)
+			box(bench, "Leg", Vector3.new(0.5, 3, 0.5), at(2.2 + dx, 1.5, dz), C.darkWood, Enum.Material.Wood)
 		end
 	end
-	box(bench, "LowerShelf", Vector3.new(3.6, 0.3, 11.4), Vector3.new(benchX, 0.8, cz), C.wood, Enum.Material.Wood)
-	box(
-		bench,
-		"Toolbox",
-		Vector3.new(1.6, 1, 2.6),
-		Vector3.new(benchX, 1.45, cz - 3),
-		C.redPaint,
-		Enum.Material.Metal,
-		DETAIL
-	)
+	box(bench, "LowerShelf", Vector3.new(3.6, 0.3, 11.4), at(2.2, 0.8, 0), C.wood, Enum.Material.Wood)
+	box(bench, "Toolbox", Vector3.new(1.6, 1, 2.6), at(2.2, 1.45, -3), C.redPaint, Enum.Material.Metal, DETAIL)
 	box(
 		bench,
 		"Vise",
 		Vector3.new(1, 0.8, 0.8),
-		Vector3.new(benchX + 1.6, 3.9, cz + 5),
+		at(3.8, 3.9, 5),
 		Color3.fromRGB(50, 70, 90),
 		Enum.Material.Metal,
 		DETAIL
 	)
 
 	-- pegboard with lanterns hanging on hooks
-	local board = box(
+	box(
 		bench,
 		"Pegboard",
 		Vector3.new(0.2, 6, 12),
-		Vector3.new(wx + 0.2, 7.5, cz),
+		at(0.2, 7.5, 0),
 		Color3.fromRGB(150, 116, 80),
-		Enum.Material.Wood
+		Enum.Material.Wood,
+		{ CastShadow = false }
 	)
-	board.CastShadow = false
 	local count = #Lanterns.List
 	for i, def in Lanterns.List do
-		local z = cz - 4.8 + (i - 1) * (9.6 / math.max(count - 1, 1))
+		local dz = -4.8 + (i - 1) * (9.6 / math.max(count - 1, 1))
 		local hookY = 9.6
-		box(
-			bench,
-			"Hook",
-			Vector3.new(0.9, 0.1, 0.1),
-			Vector3.new(wx + 0.75, hookY, z),
-			C.steel,
-			Enum.Material.Metal,
-			DETAIL
-		)
+		box(bench, "Hook", Vector3.new(0.9, 0.1, 0.1), at(0.75, hookY, dz), C.steel, Enum.Material.Metal, DETAIL)
 		local lantern = LanternBuilder.buildModel(def.id, true)
 		-- ring centre sits on the hook; lantern hangs below, off the board
-		lantern:PivotTo(CFrame.new(wx + 1.1, hookY - 2.4, z) * CFrame.Angles(0, math.rad(90), 0))
+		lantern:PivotTo(at(1.1, hookY - 2.4, dz) * CFrame.Angles(0, math.rad(90), 0))
 		local light = lantern:FindFirstChild("Light", true)
 		if light then
 			light.Brightness *= 0.3
@@ -1117,47 +1145,35 @@ local function buildWorkbench(root: Instance)
 		end
 		lantern.Parent = bench
 	end
-	cagedLight(
-		bench,
-		CFrame.new(wx + 0.3, 11.5, cz) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(-30), 0, 0),
-		16,
-		1
-	)
+	cagedLight(bench, at(0.3, 11.5, 0) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(-30), 0, 0), 16, 1)
 
-	local sign = box(
-		bench,
-		"Sign",
-		Vector3.new(0.1, 1.2, 6),
-		Vector3.new(wx + 0.35, 12.8, cz),
-		C.paint,
-		Enum.Material.Plaster,
-		DETAIL
-	)
+	local sign = box(bench, "Sign", Vector3.new(0.1, 1.2, 6), at(0.35, 12.8, 0), C.paint, Enum.Material.Plaster, DETAIL)
 	surfaceText(sign, Enum.NormalId.Right, "LANTERNS", Enum.Font.SpecialElite, Color3.fromRGB(40, 30, 24))
 	prompt(top, "Workbench", "Customize Lantern", "Lanterns")
 end
 
 local function buildReadingNook(root: Instance)
 	local nook = folder(root, "Reading")
-	local cx, cz = -40, -34
+	-- armchairs turned toward the back window, so you can sit and watch the water
+	local cx, cz = -27, -18
 	box(
 		nook,
 		"Rug",
-		Vector3.new(12, 0.08, 10),
+		Vector3.new(10, 0.08, 12),
 		Vector3.new(cx, 0.04, cz),
 		Color3.fromRGB(92, 44, 32),
 		Enum.Material.Carpet,
 		{ CanCollide = false }
 	)
-	armchair(nook, CFrame.new(cx - 3, 0, cz + 2) * CFrame.Angles(0, math.rad(200), 0), Color3.fromRGB(96, 70, 46))
-	armchair(nook, CFrame.new(cx + 3, 0, cz + 2) * CFrame.Angles(0, math.rad(160), 0), Color3.fromRGB(70, 40, 36))
-	box(nook, "SideTable", Vector3.new(1.8, 2.2, 1.8), Vector3.new(cx, 1.1, cz + 3.5), C.darkWood, Enum.Material.Wood)
-	deskLamp(nook, Vector3.new(cx, 2.2, cz + 3.5), 12)
+	armchair(nook, CFrame.new(cx + 1, 0, cz + 3) * CFrame.Angles(0, math.rad(70), 0), Color3.fromRGB(96, 70, 46))
+	armchair(nook, CFrame.new(cx + 1, 0, cz - 3) * CFrame.Angles(0, math.rad(110), 0), Color3.fromRGB(70, 40, 36))
+	box(nook, "SideTable", Vector3.new(1.8, 2.2, 1.8), Vector3.new(cx + 3.5, 1.1, cz), C.darkWood, Enum.Material.Wood)
+	deskLamp(nook, Vector3.new(cx + 3.5, 2.2, cz), 12)
 	box(
 		nook,
 		"FloorLampPole",
 		Vector3.new(0.25, 6, 0.25),
-		Vector3.new(cx - 6, 3, cz - 3),
+		Vector3.new(cx + 4, 3, cz + 6),
 		C.brass,
 		Enum.Material.Metal,
 		DETAIL
@@ -1166,22 +1182,22 @@ local function buildReadingNook(root: Instance)
 		nook,
 		"FloorLampShade",
 		Vector3.new(1.6, 1.2, 1.6),
-		Vector3.new(cx - 6, 6.5, cz - 3),
+		Vector3.new(cx + 4, 6.5, cz + 6),
 		Color3.fromRGB(230, 190, 140),
 		Enum.Material.Fabric,
 		DETAIL
 	)
-	pointLight(shade, 14, 0.9, true)
-	bookPile(nook, Vector3.new(cx + 5, 0, cz - 3), 6)
-	bookPile(nook, Vector3.new(cx + 6.2, 0, cz - 1.6), 4)
+	pointLight(shade, 14, 0.8, true)
+	bookPile(nook, Vector3.new(cx + 5, 0, cz - 5), 6)
+	bookPile(nook, Vector3.new(cx - 2, 0, cz + 6), 4)
 
-	readingTable(nook, Vector3.new(-22, 0, -32), 0)
-	readingTable(nook, Vector3.new(22, 0, -32), 0)
+	readingTable(nook, Vector3.new(-12, 0, -28), 0)
+	readingTable(nook, Vector3.new(14, 0, -26), 0)
 end
 
 local function buildFurnace(root: Instance)
 	local corner = folder(root, "Furnace")
-	local fx, fz = HALF_X - 5, -32
+	local fx, fz = HALF_X - 5, -28
 	box(corner, "Body", Vector3.new(6, 7, 5), Vector3.new(fx, 3.5, fz), Color3.fromRGB(58, 56, 52), Enum.Material.Metal)
 	local grate = box(
 		corner,
@@ -1249,7 +1265,8 @@ end
 
 local function buildLeaderboard(root: Instance)
 	local board = folder(root, "Leaderboard")
-	local pos = Vector3.new(HALF_X - 0.25, 7.5, 40)
+	local z = 2
+	local pos = Vector3.new(HALF_X - 0.25, 7.5, z)
 	local face = box(board, "Board", Vector3.new(0.3, 7, 14), pos, C.chalkboard, Enum.Material.Slate)
 	for _, dz in { -7.2, 7.2 } do
 		box(
@@ -1293,12 +1310,12 @@ local function buildLeaderboard(root: Instance)
 	)
 	cagedLight(
 		board,
-		CFrame.new(HALF_X - 0.2, 12.2, 40) * CFrame.Angles(0, math.rad(-90), 0) * CFrame.Angles(math.rad(-35), 0, 0),
+		CFrame.new(HALF_X - 0.2, 9, z + 8.5) * CFrame.Angles(0, math.rad(-90), 0) * CFrame.Angles(math.rad(-25), 0, 0),
 		14,
 		1
 	)
-	for _, z in { 36, 44 } do
-		chair(board, Vector3.new(HALF_X - 9, 0, z), math.rad(-90))
+	for _, dz in { -4, 4 } do
+		chair(board, Vector3.new(HALF_X - 8, 0, z + dz), math.rad(-90))
 	end
 
 	local gui = Instance.new("SurfaceGui")
@@ -1438,17 +1455,20 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 		Enum.Material.Metal,
 		DETAIL
 	)
-	local light = cagedLight(queue, CFrame.new(x + 4, 8.6, wallZ + 0.15) * CFrame.Angles(math.rad(-20), 0, 0), 16, 1.1)
+	local light =
+		cagedLight(queue, CFrame.new(x + 3.9, 8.6, wallZ + 0.15) * CFrame.Angles(math.rad(-20), 0, 0), 14, 1.1)
 	light.Name = "DoorLight"
 
 	-- stencilled straight onto the cinderblock above the door (faces +Z = Back face)
-	local sign =
-		box(pad, "Sign", Vector3.new(6, 2.2, 0.05), Vector3.new(x, 11.6, wallZ + 0.03), C.block, Enum.Material.Brick, {
-			Transparency = 1,
-			CanCollide = false,
-			CanQuery = false,
-			CastShadow = false,
-		})
+	local sign = box(
+		pad,
+		"Sign",
+		Vector3.new(6, 2.2, 0.05),
+		Vector3.new(x, 11.6, wallZ + 0.03),
+		C.block,
+		Enum.Material.Brick,
+		INVISIBLE
+	)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SurfaceGui"
 	gui.Face = Enum.NormalId.Back
@@ -1496,19 +1516,8 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 		Enum.Material.Carpet,
 		DETAIL
 	)
-	box(pad, "Zone", Vector3.new(7, 8, 6), Vector3.new(x, 4, padZ), Color3.new(1, 1, 1), nil, {
-		Transparency = 1,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-		CastShadow = false,
-	})
-	box(pad, "Exit", Vector3.new(1, 1, 1), Vector3.new(x, 3, padZ + 9), Color3.new(1, 1, 1), nil, {
-		Transparency = 1,
-		CanCollide = false,
-		CanQuery = false,
-		CanTouch = false,
-	})
+	box(pad, "Zone", Vector3.new(7, 8, 6), Vector3.new(x, 4, padZ), Color3.new(1, 1, 1), nil, INVISIBLE)
+	box(pad, "Exit", Vector3.new(1, 1, 1), Vector3.new(x, 3, padZ + 9), Color3.new(1, 1, 1), nil, INVISIBLE)
 	return pad
 end
 
@@ -1519,7 +1528,7 @@ local function buildDoorWall(root: Instance)
 	pads.Parent = root
 
 	-- mirrored wings: Solo on the outside, Squad nearest the clock
-	local wings = { A = { -40, -26, -12 }, B = { 40, 26, 12 } }
+	local wings = { A = { -29, -19, -9 }, B = { 29, 19, 9 } }
 	local styleIndex = { A = { 1, 2, 3 }, B = { 6, 5, 4 } }
 	for wing, xs in wings do
 		for i, mode in Config.ModeOrder do
@@ -1592,29 +1601,209 @@ local function buildDoorWall(root: Instance)
 		DETAIL
 	)
 
-	-- red stencil, painted a little crooked
+	-- red stencil, painted a little crooked, between the two wings
 	local stencil = box(
 		queue,
 		"Stencil",
-		Vector3.new(16, 2.6, 0.05),
-		CFrame.new(0, 12.2, wallZ + 0.03) * CFrame.Angles(0, 0, math.rad(-1.5)),
+		Vector3.new(11, 2, 0.05),
+		CFrame.new(0, 13.1, wallZ + 0.03) * CFrame.Angles(0, 0, math.rad(-1.5)),
 		C.block,
 		Enum.Material.Brick,
-		{
-			Transparency = 1,
-			CanCollide = false,
-			CanQuery = false,
-			CastShadow = false,
-		}
+		INVISIBLE
 	)
 	surfaceText(stencil, Enum.NormalId.Back, "PICK A DOOR", Enum.Font.SpecialElite, C.redPaint)
+
 	-- one bulb in front of the doors that won't stay on
-	local _, bulb = bareBulb(queue, Vector3.new(0, CEILING - 4.5, wallZ + 12), 22, 1.2, true)
+	local _, bulb = bareBulb(queue, Vector3.new(5, CEILING - 4.5, wallZ + 12), 22, 1.2, true)
 	bulb:FindFirstChildOfClass("PointLight"):SetAttribute("Flicker", "bulb")
 end
 
 ------------------------------------------------------------------------------------------
--- Lighting: dark, warm, dusty
+-- Outside: an endless flooded natatorium of tiled groin vaults, seen only through the windows
+------------------------------------------------------------------------------------------
+local POOL = {
+	floorY = -8, -- tiled pool floor
+	waterY = 4, -- still water, a stud below the big window sills
+	spacing = 28, -- pier grid
+	pier = 4,
+	springY = 18, -- vaults spring above the basement roof so they never cut into it
+	extent = 5, -- bays in each direction from the centre
+}
+
+-- Half of a groin vault: a barrel shell spanning one bay. Two crossed barrels per bay read as a
+-- groin vault from below. `alongX` decides which way the barrel runs.
+local function barrel(parent: Instance, cx: number, cz: number, alongX: boolean)
+	local radius, segments = POOL.spacing / 2, 10
+	local chord = 2 * radius * math.sin(math.pi / (2 * segments)) + 0.5
+	for i = 0, segments - 1 do
+		local a = math.pi * (i + 0.5) / segments
+		local y = POOL.springY + math.sin(a) * radius
+		local offset = math.cos(a) * radius
+		if alongX then
+			box(
+				parent,
+				"Vault",
+				Vector3.new(POOL.spacing, 1, chord),
+				CFrame.new(cx, y, cz + offset) * CFrame.Angles(-(math.pi / 2 + a), 0, 0),
+				C.tile,
+				Enum.Material.CeramicTiles,
+				DETAIL
+			)
+		else
+			box(
+				parent,
+				"Vault",
+				Vector3.new(chord, 1, POOL.spacing),
+				CFrame.new(cx + offset, y, cz) * CFrame.Angles(0, 0, a + math.pi / 2),
+				C.tile,
+				Enum.Material.CeramicTiles,
+				DETAIL
+			)
+		end
+	end
+end
+
+local function buildNatatorium(root: Instance)
+	local pool = folder(root, "Natatorium")
+	local S, n = POOL.spacing, POOL.extent
+	local size = S * (n * 2 + 1)
+	local ox, oz = HALF_X + WALL, HALF_Z + WALL
+
+	box(
+		pool,
+		"PoolFloor",
+		Vector3.new(size, 2, size),
+		Vector3.new(0, POOL.floorY - 1, 0),
+		C.tileDeep,
+		Enum.Material.CeramicTiles
+	)
+	-- the outside of the basement is tiled too, as if it had been sunk into the pool
+	-- (side walls only below the water and above the windows, so the glass stays clear)
+	local function skin(name, footprint, y0, y1, pos)
+		box(
+			pool,
+			name,
+			Vector3.new(footprint.X, y1 - y0, footprint.Z),
+			Vector3.new(pos.X, (y0 + y1) / 2, pos.Z),
+			C.tile,
+			Enum.Material.CeramicTiles,
+			DETAIL
+		)
+	end
+	for _, s in { -1, 1 } do
+		local xSize, zSize = Vector3.new(0.4, 0, oz * 2 + 0.8), Vector3.new(ox * 2 + 0.8, 0, 0.4)
+		skin("OuterSkinX", xSize, POOL.floorY, POOL.waterY + 0.5, Vector3.new(s * (ox + 0.2), 0, 0))
+		skin("OuterSkinX", xSize, 14.5, POOL.springY, Vector3.new(s * (ox + 0.2), 0, 0))
+		skin("OuterSkinZ", zSize, POOL.floorY, POOL.springY, Vector3.new(0, 0, s * (oz + 0.2)))
+	end
+
+	-- piers on the grid corners (bay centres sit on multiples of S), skipping any inside the basement
+	local pierH = POOL.springY - POOL.floorY
+	for i = -n, n + 1 do
+		for k = -n, n + 1 do
+			local px, pz = (i - 0.5) * S, (k - 0.5) * S
+			if math.abs(px) - POOL.pier / 2 >= ox or math.abs(pz) - POOL.pier / 2 >= oz then
+				box(
+					pool,
+					"Pier",
+					Vector3.new(POOL.pier, pierH, POOL.pier),
+					Vector3.new(px, POOL.floorY + pierH / 2, pz),
+					C.tile,
+					Enum.Material.CeramicTiles
+				)
+			end
+		end
+	end
+
+	-- vaults over every bay, and a cold light hanging in every other bay near the basement
+	for i = -n, n do
+		for k = -n, n do
+			local cx, cz = i * S, k * S
+			barrel(pool, cx, cz, true)
+			barrel(pool, cx, cz, false)
+			if
+				(i + k) % 2 == 0
+				and math.abs(i) <= 3
+				and math.abs(k) <= 3
+				and not (math.abs(cx) < ox and math.abs(cz) < oz)
+			then
+				local glow = box(
+					pool,
+					"VaultGlow",
+					Vector3.new(1, 1, 1),
+					Vector3.new(cx, POOL.springY + 6, cz),
+					C.coldLight,
+					nil,
+					INVISIBLE
+				)
+				pointLight(glow, 40, 0.45, false, C.coldLight)
+			end
+		end
+	end
+
+	-- one bay has an open oculus and a ladder climbing up to it out of the water
+	local lx, lz = -2 * S, 0
+	local apex = POOL.springY + S / 2
+	local oculus = box(
+		pool,
+		"Oculus",
+		Vector3.new(0.4, 7, 7),
+		CFrame.new(lx, apex - 1.5, lz) * CFrame.Angles(0, 0, math.rad(90)),
+		Color3.fromRGB(225, 240, 240),
+		Enum.Material.Neon,
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+			CastShadow = false,
+		}
+	)
+	local beam = Instance.new("SpotLight")
+	beam.Face = Enum.NormalId.Left -- after the roll, the cylinder's -X face points down
+	beam.Angle = 50
+	beam.Range = 40
+	beam.Brightness = 2
+	beam.Color = Color3.fromRGB(200, 230, 235)
+	beam.Parent = oculus
+	local ladderBottom, ladderTop = POOL.floorY, apex - 1.5
+	for _, dz in { -0.9, 0.9 } do
+		box(
+			pool,
+			"LadderRail",
+			Vector3.new(0.2, ladderTop - ladderBottom, 0.2),
+			Vector3.new(lx + 2.6, (ladderBottom + ladderTop) / 2, lz + dz),
+			Color3.fromRGB(190, 195, 195),
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+	for y = ladderBottom + 1, ladderTop - 0.5, 1.2 do
+		box(
+			pool,
+			"LadderRung",
+			Vector3.new(0.15, 0.15, 1.8),
+			Vector3.new(lx + 2.6, y, lz),
+			Color3.fromRGB(190, 195, 195),
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+
+	-- still water everywhere outside the basement (terrain water reflects the vaults)
+	local terrain = workspace.Terrain
+	terrain:Clear()
+	local waterH = POOL.waterY - POOL.floorY
+	local waterCf = CFrame.new(0, (POOL.floorY + POOL.waterY) / 2, 0)
+	terrain:FillBlock(waterCf, Vector3.new(size, waterH, size), Enum.Material.Water)
+	terrain:FillBlock(waterCf, Vector3.new(ox * 2, waterH, oz * 2), Enum.Material.Air)
+	terrain.WaterColor = Color3.fromRGB(38, 78, 82)
+	terrain.WaterTransparency = 0.55
+	terrain.WaterReflectance = 0.7
+	terrain.WaterWaveSize = 0.02
+	terrain.WaterWaveSpeed = 2
+end
+
+------------------------------------------------------------------------------------------
+-- Lighting: dark, warm, dusty inside; the cold comes in through the glass
 ------------------------------------------------------------------------------------------
 local function setupLighting()
 	-- Technology is engine-protected from scripts; set Lighting.Technology = Future in Studio.
@@ -1623,10 +1812,10 @@ local function setupLighting()
 	end)
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
-	Lighting.Ambient = Color3.fromRGB(16, 12, 9)
-	Lighting.OutdoorAmbient = Color3.fromRGB(10, 9, 8)
+	Lighting.Ambient = Color3.fromRGB(16, 13, 11)
+	Lighting.OutdoorAmbient = Color3.fromRGB(10, 12, 13)
 	Lighting.EnvironmentDiffuseScale = 0.15
-	Lighting.EnvironmentSpecularScale = 0.3
+	Lighting.EnvironmentSpecularScale = 0.4
 	Lighting.GlobalShadows = true
 	Lighting.ExposureCompensation = 0.3
 
@@ -1636,18 +1825,18 @@ local function setupLighting()
 		end
 	end
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.42
+	atmosphere.Density = 0.36
 	atmosphere.Offset = 0
-	atmosphere.Color = Color3.fromRGB(66, 52, 40)
-	atmosphere.Decay = Color3.fromRGB(30, 24, 18)
+	atmosphere.Color = Color3.fromRGB(52, 62, 62)
+	atmosphere.Decay = Color3.fromRGB(20, 28, 30)
 	atmosphere.Glare = 0
-	atmosphere.Haze = 2
+	atmosphere.Haze = 1.6
 	atmosphere.Parent = Lighting
 
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.TintColor = Color3.fromRGB(255, 238, 220)
+	cc.TintColor = Color3.fromRGB(255, 240, 226)
 	cc.Contrast = 0.1
-	cc.Saturation = -0.12
+	cc.Saturation = -0.1
 	cc.Brightness = 0.02
 	cc.Parent = Lighting
 
@@ -1681,6 +1870,7 @@ function LobbyBuilder.build()
 	buildFurnace(root)
 	buildLeaderboard(root)
 	buildDoorWall(root)
+	buildNatatorium(root)
 	root.Parent = workspace
 
 	setupLighting()
