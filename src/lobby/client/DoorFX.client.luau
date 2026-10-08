@@ -55,6 +55,8 @@ for _, pad in pads:GetChildren() do
 		titlePos = title.Position,
 		status = status,
 		statusColor = status.TextColor3,
+		counter = pad:WaitForChild("Zone"):WaitForChild("Counter"),
+		shownCount = -1,
 		glitches = LABEL_GLITCHES[mode] or { "?" },
 		nextGlitch = os.clock() + 3 + math.random() * 10,
 		open = 0,
@@ -97,6 +99,20 @@ local function updateDoor(d, t: number, dt: number): number
 		d.leaf:PivotTo(d.hinge * CFrame.Angles(0, angle, 0))
 		d.lastAngle = angle
 	end
+
+	-- floating counter: fill one ring per player; it throbs while the door is about to open
+	local count = pad:GetAttribute("Count") or 0
+	if count ~= d.shownCount then
+		d.shownCount = count
+		for _, dot in d.counter.Dots:GetChildren() do
+			if dot:IsA("Frame") then
+				dot.BackgroundTransparency = dot.LayoutOrder <= count and 0 or 1
+			end
+		end
+		d.counter.Count.Text = string.format("%d / %d", count, pad:GetAttribute("Capacity") or 0)
+	end
+	local throb = (tension > 0 and timeLeft <= 5 or launching) and (1 + math.sin(t * 12) * 0.06) or 1
+	d.counter.Size = UDim2.fromOffset(160 * throb, 50 * throb)
 
 	-- the count pulses red in the last five seconds
 	if tension > 0 and timeLeft <= 5 then

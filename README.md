@@ -27,6 +27,11 @@ src/trial/          Trial scripts + builders/TrialBuilder
 - `.mcp.json` launches `tools/studio-mcp.cmd`, which finds the newest `StudioMCP.exe` (Roblox's own `mcp.bat` goes stale after updates).
 - `python tools/mcp_sync.py [default|trial]` emits Luau that mirrors repo scripts into the open place, for sessions without the Rojo plugin.
 
+## Mesh props (live in the place file, not git)
+`ServerStorage.Props` holds Creator Store models (scripts stripped, pivot at bottom centre, `FrontYaw`
+attribute). `LobbyBuilder` clones them via `prop()` and falls back to primitive furniture if missing,
+so **save the place** after changing props.
+
 ## Develop
 1. `rojo build default.project.json -o Lobby.rbxl` and open it in Studio (or open your place and `rojo serve`, then connect with the Rojo plugin).
 2. Bake the map into the place: in the command bar run

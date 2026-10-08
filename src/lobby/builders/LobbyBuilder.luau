@@ -18,6 +18,7 @@
 ]]
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -32,7 +33,7 @@ local HALF_X, HALF_Z, CEILING, WALL = 36, 48, 16, 4
 
 local C = {
 	concrete = Color3.fromRGB(104, 98, 90),
-	block = Color3.fromRGB(150, 140, 122), -- painted cinderblock
+	block = Color3.fromRGB(140, 137, 130), -- painted cinderblock, a cool off-white
 	blockLow = Color3.fromRGB(96, 86, 74), -- grime band along the floor
 	joist = Color3.fromRGB(92, 66, 44),
 	wood = Color3.fromRGB(78, 52, 34),
@@ -44,7 +45,7 @@ local C = {
 	pipe = Color3.fromRGB(150, 96, 60), -- copper
 	cardboard = Color3.fromRGB(156, 118, 78),
 	brass = Color3.fromRGB(150, 112, 56),
-	warm = Color3.fromRGB(255, 158, 78),
+	warm = Color3.fromRGB(255, 184, 122), -- lamp light: warm but not orange
 	bulb = Color3.fromRGB(255, 172, 100), -- warm amber, not white
 	paint = Color3.fromRGB(214, 204, 182),
 	redPaint = Color3.fromRGB(150, 40, 32),
@@ -68,6 +69,24 @@ local BOOK_COLORS = {
 }
 
 local rng = Random.new(1337)
+
+-- Mesh props (Creator Store models, scripts stripped) live in ServerStorage.Props inside the place file.
+-- Each has its pivot at the bottom centre and a FrontYaw attribute that turns its front toward -Z.
+-- prop() puts one at `cf` (a floor point) facing cf's -Z, or returns nil so callers can fall back.
+local PROPS = ServerStorage:FindFirstChild("Props")
+local function prop(parent: Instance, name: string, cf: CFrame, scale: number?): Model?
+	local source = PROPS and PROPS:FindFirstChild(name)
+	if not source then
+		return nil
+	end
+	local model = source:Clone()
+	if scale and scale ~= 1 then
+		model:ScaleTo(model:GetScale() * scale)
+	end
+	model:PivotTo(cf * CFrame.Angles(0, model:GetAttribute("FrontYaw") or 0, 0))
+	model.Parent = parent
+	return model
+end
 
 -- Generic anchored part. `cf` may be a CFrame or a Vector3 position.
 local function box(parent: Instance, name: string, size: Vector3, cf, color: Color3, material: Enum.Material?, extra)
@@ -405,7 +424,7 @@ local function buildShell(root: Instance)
 		"Floor",
 		Vector3.new(W + WALL * 2, 2, D + WALL * 2),
 		Vector3.new(0, -1, 0),
-		C.concrete,
+		Color3.fromRGB(96, 90, 82), -- reads as grout between the tiles
 		Enum.Material.Concrete
 	)
 
@@ -724,8 +743,14 @@ local function buildStairs(root: Instance)
 	)
 	bareBulb(stairs, Vector3.new(STAIR.x0 + 16, shaftTop - 2.5, zc), 26, 1.8, true, "globe")
 
-	-- clutter under the stairs
-	for i, spec in { { 6, 1.5, 0, 3 }, { 9.2, 1.25, -0.8, 2.5 }, { 6.4, 3.6, 0.2, 1.5 } } do
+	-- clutter under the stairs: real boxes if we have them
+	local taped = prop(stairs, "BoxTaped", CFrame.new(STAIR.x0 + 6, 0, zc) * CFrame.Angles(0, 0.3, 0), 1.2)
+	if taped then
+		prop(stairs, "BoxOpen", CFrame.new(STAIR.x0 + 9.5, 0, zc - 0.5) * CFrame.Angles(0, -0.4, 0))
+		prop(stairs, "BoxTaped", CFrame.new(STAIR.x0 + 6.2, 2.75, zc + 0.2) * CFrame.Angles(0, 1.1, 0), 0.8)
+		prop(stairs, "BooksPile", CFrame.new(STAIR.x0 + 12, 0, zc + 1) * CFrame.Angles(0, 2, 0), 0.8)
+	end
+	for i, spec in taped and {} or { { 6, 1.5, 0, 3 }, { 9.2, 1.25, -0.8, 2.5 }, { 6.4, 3.6, 0.2, 1.5 } } do
 		box(
 			stairs,
 			"Box",
@@ -909,6 +934,12 @@ local function metalRack(parent: Instance, cf: CFrame, length: number, height: n
 end
 
 local function bookPile(parent: Instance, pos: Vector3, count: number)
+	if pos.Y < 0.5 then
+		local yaw = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+		if prop(parent, count >= 5 and "BooksStack" or "BooksPile", CFrame.new(pos) * yaw, 0.8) then
+			return
+		end
+	end
 	for k = 1, count do
 		box(
 			parent,
@@ -923,6 +954,19 @@ local function bookPile(parent: Instance, pos: Vector3, count: number)
 	end
 end
 
+local function wallShelves(parent: Instance, cf: CFrame, length: number)
+	if not (PROPS and PROPS:FindFirstChild("Bookshelf")) then
+		bookcase(parent, cf, length, 11, 2.4, false)
+		return
+	end
+	local width = 6.2
+	local count = math.max(1, math.floor(length / width + 0.5))
+	for i = 1, count do
+		local x = (i - (count + 1) / 2) * width
+		prop(parent, "Bookshelf", cf * CFrame.new(x, 0, -0.5) * CFrame.Angles(0, math.pi, 0))
+	end
+end
+
 local function buildStacks(root: Instance)
 	local stacks = folder(root, "Stacks")
 	-- only four freestanding bookcases; the floor stays mostly open
@@ -932,9 +976,18 @@ local function buildStacks(root: Instance)
 	end
 	-- against the walls: between the big windows, and along the front wall
 	local faceRight, faceBack = CFrame.Angles(0, math.rad(90), 0), CFrame.Angles(0, math.rad(180), 0)
-	bookcase(stacks, CFrame.new(-HALF_X + 1.4, 0, 18) * faceRight, 12, 11, 2.4, false)
-	bookcase(stacks, CFrame.new(-HALF_X + 1.4, 0, -6) * faceRight, 12, 11, 2.4, false)
-	bookcase(stacks, CFrame.new(-12, 0, HALF_Z - 1.4) * faceBack, 12, 11, 2.4, false)
+	wallShelves(stacks, CFrame.new(-HALF_X + 1.4, 0, 18) * faceRight, 12)
+	wallShelves(stacks, CFrame.new(-HALF_X + 1.4, 0, -6) * faceRight, 12)
+	wallShelves(stacks, CFrame.new(-12, 0, HALF_Z - 1.4) * faceBack, 12)
+
+	-- plants: on top of the freestanding bookcases and in the corners, as if someone tried
+	prop(stacks, "Fern", CFrame.new(-16, 9.8, 18) * CFrame.Angles(0, 0.7, 0))
+	prop(stacks, "Fern", CFrame.new(16, 9.8, -6) * CFrame.Angles(0, 2.1, 0))
+	prop(stacks, "Palm", CFrame.new(-19.5, 9.8, -6) * CFrame.Angles(0, 1.3, 0), 0.8)
+	prop(stacks, "PalmVase", CFrame.new(-30.5, 0, 46))
+	prop(stacks, "PalmVase", CFrame.new(-33.5, 0, -40), 0.9)
+	prop(stacks, "Palm", CFrame.new(33.5, 0, -39))
+	prop(stacks, "Palm", CFrame.new(33, 0, -7))
 	metalRack(stacks, CFrame.new(1, 0, HALF_Z - 1.6) * faceBack, 9, 8, 2.4)
 
 	for _, p in
@@ -990,6 +1043,9 @@ end
 ------------------------------------------------------------------------------------------
 local function chair(parent: Instance, pos: Vector3, yaw: number)
 	local cf = CFrame.new(pos) * CFrame.Angles(0, yaw, 0)
+	if prop(parent, "ChairVictorian", cf * CFrame.Angles(0, rng:NextNumber(-0.15, 0.15), 0)) then
+		return
+	end
 	local model = folder(parent, "Chair")
 	box(model, "Seat", Vector3.new(1.8, 0.3, 1.8), cf * CFrame.new(0, 1.8, 0), C.wood, Enum.Material.Wood)
 	box(model, "Back", Vector3.new(1.8, 2.2, 0.3), cf * CFrame.new(0, 3, 0.8), C.wood, Enum.Material.Wood)
@@ -1009,6 +1065,9 @@ local function chair(parent: Instance, pos: Vector3, yaw: number)
 end
 
 local function armchair(parent: Instance, cf: CFrame, color: Color3)
+	if prop(parent, "Armchair", cf) then
+		return
+	end
 	local model = folder(parent, "Armchair")
 	box(model, "Seat", Vector3.new(3.2, 1.6, 3), cf * CFrame.new(0, 1, 0), color, Enum.Material.Fabric)
 	box(model, "Back", Vector3.new(3.2, 3, 0.8), cf * CFrame.new(0, 2.3, 1.2), color, Enum.Material.Fabric)
@@ -1018,6 +1077,13 @@ local function armchair(parent: Instance, cf: CFrame, color: Color3)
 end
 
 local function deskLamp(parent: Instance, pos: Vector3, range: number?)
+	local lamp = prop(parent, "BankerLamp", CFrame.new(pos) * CFrame.Angles(0, rng:NextNumber(-0.6, 0.6), 0), 1)
+	if lamp then
+		local glow =
+			box(lamp, "Glow", Vector3.new(0.2, 0.2, 0.2), pos + Vector3.new(0, 1.15, 0), C.bulb, nil, INVISIBLE)
+		pointLight(glow, range or 9, 1, false)
+		return
+	end
 	box(
 		parent,
 		"LampBase",
@@ -1190,6 +1256,10 @@ local function buildShop(root: Instance)
 	surfaceText(sign, Enum.NormalId.Right, "SHOP", Enum.Font.SpecialElite, Color3.fromRGB(40, 26, 18))
 	surfaceText(sign, Enum.NormalId.Left, "SHOP", Enum.Font.SpecialElite, Color3.fromRGB(40, 26, 18))
 	bareBulb(shop, Vector3.new(cx + 3, 9.5, cz + 5.5), 18, 1.2, true, "shade")
+	-- the librarian's chair behind the desk, and an old filing cabinet against the wall
+	prop(shop, "ChairVictorian", CFrame.new(cx - 2.6, 0, cz + 1.5) * CFrame.Angles(0, -math.pi / 2, 0))
+	prop(shop, "Cabinet", CFrame.new(-HALF_X + 1.3, 0, 43.5) * CFrame.Angles(0, -math.pi / 2, 0))
+	prop(shop, "BooksStack", CFrame.new(cx + 2.8, 0, cz - 6) * CFrame.Angles(0, 0.5, 0), 0.8)
 	prompt(top, "Checkout Desk", "Browse Shop", "Shop")
 end
 
@@ -1248,6 +1318,8 @@ local function buildWorkbench(root: Instance)
 
 	local sign = box(bench, "Sign", Vector3.new(0.1, 1.2, 6), at(0.35, 12.8, 0), C.paint, Enum.Material.Plaster, DETAIL)
 	surfaceText(sign, Enum.NormalId.Right, "LANTERNS", Enum.Font.SpecialElite, Color3.fromRGB(40, 30, 24))
+	prop(bench, "DeskLamp", at(2.8, 3.5, -4.6) * CFrame.Angles(0, math.rad(-120), 0), 0.9)
+	prop(bench, "OfficeChair", at(5.5, 0, 1) * CFrame.Angles(0, math.rad(80), 0)) -- turned toward the bench
 	prompt(top, "Workbench", "Customize Lantern", "Lanterns")
 end
 
@@ -1737,8 +1809,54 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 		Enum.Material.Carpet,
 		DETAIL
 	)
-	box(pad, "Zone", Vector3.new(7, 8, 6), Vector3.new(x, 4, padZ), Color3.new(1, 1, 1), nil, INVISIBLE)
+	local zone = box(pad, "Zone", Vector3.new(7, 8, 6), Vector3.new(x, 4, padZ), Color3.new(1, 1, 1), nil, INVISIBLE)
 	box(pad, "Exit", Vector3.new(1, 1, 1), Vector3.new(x, 3, padZ + 9), Color3.new(1, 1, 1), nil, INVISIBLE)
+
+	-- floating counter over the mat: one ring per seat, filled in by DoorFX as players step on
+	local counter = Instance.new("BillboardGui")
+	counter.Name = "Counter"
+	counter.Size = UDim2.fromOffset(160, 50)
+	counter.StudsOffsetWorldSpace = Vector3.new(0, 3.4, 0)
+	counter.MaxDistance = 55
+	counter.LightInfluence = 0
+	counter.Parent = zone
+	local dots = Instance.new("Frame")
+	dots.Name = "Dots"
+	dots.BackgroundTransparency = 1
+	dots.Size = UDim2.new(1, 0, 0, 22)
+	dots.Parent = counter
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 6)
+	layout.Parent = dots
+	for i = 1, spec.capacity do
+		local dot = Instance.new("Frame")
+		dot.Name = "Dot" .. i
+		dot.LayoutOrder = i
+		dot.Size = UDim2.fromOffset(18, 18)
+		dot.BackgroundColor3 = Color3.fromRGB(240, 222, 190)
+		dot.BackgroundTransparency = 1
+		dot.Parent = dots
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = dot
+		local ring = Instance.new("UIStroke")
+		ring.Color = Color3.fromRGB(240, 222, 190)
+		ring.Thickness = 2
+		ring.Parent = dot
+	end
+	local countLabel = Instance.new("TextLabel")
+	countLabel.Name = "Count"
+	countLabel.BackgroundTransparency = 1
+	countLabel.Position = UDim2.fromOffset(0, 24)
+	countLabel.Size = UDim2.new(1, 0, 0, 24)
+	countLabel.Font = Enum.Font.Oswald
+	countLabel.TextScaled = true
+	countLabel.TextColor3 = Color3.fromRGB(240, 222, 190)
+	countLabel.TextStrokeTransparency = 0.6
+	countLabel.Text = string.format("0 / %d", spec.capacity)
+	countLabel.Parent = counter
 	return pad
 end
 
@@ -2112,6 +2230,283 @@ local function buildNatatorium(root: Instance)
 end
 
 ------------------------------------------------------------------------------------------
+-- Finishes: worn floor tiles, baseboards, chamfered cornices
+------------------------------------------------------------------------------------------
+local TILE = 6
+
+local function buildFinishes(root: Instance)
+	local finishes = folder(root, "Finishes")
+	-- big worn tiles; the darker floor slab beneath shows through as grout
+	local base = Color3.fromRGB(128, 122, 112)
+	for ix = 0, HALF_X * 2 / TILE - 1 do
+		for iz = 0, HALF_Z * 2 / TILE - 1 do
+			local x = -HALF_X + (ix + 0.5) * TILE
+			local z = -HALF_Z + (iz + 0.5) * TILE
+			local shade = rng:NextNumber(-0.07, 0.05)
+			local color = shade < 0 and base:Lerp(Color3.fromRGB(70, 64, 56), -shade * 3)
+				or base:Lerp(Color3.fromRGB(170, 162, 150), shade * 3)
+			box(
+				finishes,
+				"Tile",
+				Vector3.new(TILE - 0.1, 0.04, TILE - 0.1),
+				Vector3.new(x, 0.02, z),
+				color,
+				Enum.Material.Concrete,
+				{
+					CastShadow = false,
+					CanQuery = false,
+					CanTouch = false,
+				}
+			)
+		end
+	end
+
+	-- baseboards on the side and front walls (the door wall keeps its grime band)
+	for _, s in { -1, 1 } do
+		box(
+			finishes,
+			"Baseboard",
+			Vector3.new(0.3, 0.8, HALF_Z * 2),
+			Vector3.new(s * (HALF_X - 0.15), 0.4, 0),
+			C.darkWood,
+			Enum.Material.Wood,
+			DETAIL
+		)
+	end
+	box(
+		finishes,
+		"Baseboard",
+		Vector3.new(HALF_X * 2, 0.8, 0.3),
+		Vector3.new(0, 0.4, HALF_Z - 0.15),
+		C.darkWood,
+		Enum.Material.Wood,
+		DETAIL
+	)
+
+	-- 45-degree chamfer where every wall meets the ceiling: a square beam rolled 45 degrees and
+	-- half-buried in the corner, so only a clean angled face shows
+	local paint = Color3.fromRGB(132, 124, 110)
+	local chamfer = 1.7
+	for _, s in { -1, 1 } do
+		box(
+			finishes,
+			"Cornice",
+			Vector3.new(HALF_Z * 2, chamfer, chamfer),
+			CFrame.new(s * HALF_X, CEILING, 0) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(45), 0, 0),
+			paint,
+			Enum.Material.Plaster,
+			DETAIL
+		)
+		box(
+			finishes,
+			"Cornice",
+			Vector3.new(HALF_X * 2, chamfer, chamfer),
+			CFrame.new(0, CEILING, s * HALF_Z) * CFrame.Angles(math.rad(45), 0, 0),
+			paint,
+			Enum.Material.Plaster,
+			DETAIL
+		)
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Clutter: papers on the floor, notes taped to the walls, the patch-notes board
+------------------------------------------------------------------------------------------
+local INK = Color3.fromRGB(40, 34, 30)
+local NOTES = {
+	"it was behind the green door",
+	"DON'T COUNT THE DOORS",
+	"day 4. the clock went backwards again",
+	"they can hear the mats",
+	"if it hums, RUN",
+	"bring a lantern. always.",
+	"I picked the left one. I'm still here?",
+	"the water outside isn't water",
+	"ask the librarian about the ladder",
+	"10 seconds is not enough",
+	"no exit no exit no exit",
+	"she says the red one is kind. she lies.",
+}
+
+local function paperColor()
+	return Color3.fromRGB(200, 194, 178):Lerp(Color3.fromRGB(172, 162, 136), rng:NextNumber())
+end
+
+-- Handwriting on one face of a sheet.
+local function scribble(part: BasePart, face: Enum.NormalId, text: string)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 120
+	gui.LightInfluence = 1
+	gui.Parent = part
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.fromScale(0.08, 0.08)
+	label.Size = UDim2.fromScale(0.84, 0.84)
+	label.Font = Enum.Font.IndieFlower
+	label.TextScaled = true
+	label.TextWrapped = true
+	label.TextColor3 = INK
+	label.Text = text
+	label.Rotation = rng:NextNumber(-6, 6)
+	label.Parent = gui
+end
+
+local function insideAny(x: number, z: number, rects): boolean
+	for _, r in rects do
+		if math.abs(x - r[1]) < r[3] and math.abs(z - r[2]) < r[4] then
+			return true
+		end
+	end
+	return false
+end
+
+-- A sheet taped to a wall. `pos` is on the wall surface, `normal` points into the room.
+local function wallNote(parent: Instance, pos: Vector3, normal: Vector3, text: string?)
+	local cf = CFrame.lookAt(pos + normal * 0.03, pos + normal * 2)
+		* CFrame.Angles(0, 0, math.rad(rng:NextNumber(-8, 8)))
+	local sheet =
+		box(parent, "Note", Vector3.new(1.1, 1.45, 0.02), cf, paperColor(), Enum.Material.SmoothPlastic, DETAIL)
+	box(
+		parent,
+		"Tape",
+		Vector3.new(0.5, 0.18, 0.025),
+		cf * CFrame.new(0, 0.68, -0.01) * CFrame.Angles(0, 0, math.rad(rng:NextNumber(-12, 12))),
+		Color3.fromRGB(230, 220, 170),
+		Enum.Material.SmoothPlastic,
+		{
+			Transparency = 0.35,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+		}
+	)
+	if text then
+		scribble(sheet, Enum.NormalId.Front, text)
+	end
+	return sheet
+end
+
+local function buildClutter(root: Instance)
+	local clutter = folder(root, "Clutter")
+
+	-- loose sheets everywhere except under the furniture, thicker in a trail toward the doors
+	local blocked = {
+		{ -16, 18, 7, 2 },
+		{ 16, 18, 7, 2 },
+		{ -16, -6, 7, 2 },
+		{ 16, -6, 7, 2 }, -- bookcases (x, z, halfX, halfZ)
+		{ -24, 36, 3, 6 },
+		{ -12, -28, 5, 4 },
+		{ 14, -26, 5, 4 }, -- desk and reading tables
+	}
+	local noteIndex = 0
+	local function sheet(x: number, z: number)
+		if insideAny(x, z, blocked) then
+			return
+		end
+		local cf = CFrame.new(x, 0.05, z)
+			* CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), math.rad(rng:NextNumber(-2, 2)))
+		local paper =
+			box(clutter, "Paper", Vector3.new(1.0, 0.02, 1.35), cf, paperColor(), Enum.Material.SmoothPlastic, DETAIL)
+		if rng:NextNumber() < 0.18 then
+			noteIndex = noteIndex % #NOTES + 1
+			scribble(paper, Enum.NormalId.Top, NOTES[noteIndex])
+		end
+	end
+	for _ = 1, 45 do
+		sheet(rng:NextNumber(-HALF_X + 3, HALF_X - 3), rng:NextNumber(-HALF_Z + 10, HALF_Z - 12))
+	end
+	for _ = 1, 28 do
+		-- the trail: down the walkway and fanning out in front of the doors
+		local t = rng:NextNumber()
+		sheet(rng:NextNumber(-4, 4) + (t ^ 2) * rng:NextNumber(-26, 26), -HALF_Z + 9 + t * 40)
+	end
+
+	-- notes taped to the walls: between the doors, beside the windows, by the stairs
+	local backZ = -HALF_Z
+	for i, x in { -24, -14, 4.5, 14, 24 } do
+		wallNote(
+			clutter,
+			Vector3.new(x, rng:NextNumber(5.5, 8), backZ),
+			Vector3.new(0, 0, 1),
+			NOTES[(i * 3) % #NOTES + 1]
+		)
+	end
+	for i, z in { 24, 12, 0, -12, -30 } do
+		wallNote(
+			clutter,
+			Vector3.new(-HALF_X, rng:NextNumber(4, 9), z + rng:NextNumber(-1, 1)),
+			Vector3.new(1, 0, 0),
+			NOTES[(i * 5) % #NOTES + 1]
+		)
+	end
+	for _, z in { -20, -2, 18 } do
+		wallNote(clutter, Vector3.new(HALF_X, rng:NextNumber(4, 6), z), Vector3.new(-1, 0, 0), nil)
+	end
+
+	-- patch-notes board on the right wall near the foot of the stairs
+	local boardCf = CFrame.lookAt(Vector3.new(HALF_X - 0.15, 7, 37), Vector3.new(0, 7, 37))
+	box(clutter, "Corkboard", Vector3.new(6, 4.2, 0.2), boardCf, Color3.fromRGB(150, 110, 70), Enum.Material.Cardboard)
+	box(
+		clutter,
+		"CorkFrame",
+		Vector3.new(6.4, 4.6, 0.15),
+		boardCf * CFrame.new(0, 0, 0.06),
+		C.darkWood,
+		Enum.Material.Wood,
+		DETAIL
+	)
+	local notice = box(
+		clutter,
+		"PatchNotes",
+		Vector3.new(3.6, 3.4, 0.02),
+		boardCf * CFrame.new(-0.9, 0, -0.12) * CFrame.Angles(0, 0, math.rad(-2)),
+		Color3.fromRGB(232, 226, 208),
+		Enum.Material.SmoothPlastic,
+		DETAIL
+	)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 90
+	gui.LightInfluence = 1
+	gui.Parent = notice
+	local text = Instance.new("TextLabel")
+	text.BackgroundTransparency = 1
+	text.Position = UDim2.fromScale(0.07, 0.05)
+	text.Size = UDim2.fromScale(0.86, 0.9)
+	text.Font = Enum.Font.SpecialElite
+	text.TextScaled = true
+	text.TextWrapped = true
+	text.TextXAlignment = Enum.TextXAlignment.Left
+	text.TextYAlignment = Enum.TextYAlignment.Top
+	text.TextColor3 = INK
+	text.Text =
+		"10/08 - THE LIBRARY OPENS\n\n- Pick a door. Any door.\n- Lanterns can be fixed up at the workbench.\n- The Librarian will explain the rest.\n- Something has been moving the papers at night."
+	text.Parent = gui
+	for _, offset in { Vector3.new(-2.5, 1.5, -0.15), Vector3.new(0.7, 1.55, -0.15), Vector3.new(2, 0.4, -0.15) } do
+		box(
+			clutter,
+			"Pin",
+			Vector3.new(0.18, 0.18, 0.18),
+			boardCf * CFrame.new(offset),
+			C.redPaint,
+			Enum.Material.SmoothPlastic,
+			{ Shape = Enum.PartType.Ball, CanCollide = false, CastShadow = false }
+		)
+	end
+	wallNote(
+		clutter,
+		(boardCf * CFrame.new(1.7, -0.6, -0.12)).Position + Vector3.new(0.12, 0, 0),
+		Vector3.new(-1, 0, 0),
+		"who keeps opening the red door?"
+	)
+end
+
+------------------------------------------------------------------------------------------
 -- Lighting: dark, warm, dusty inside; the cold comes in through the glass
 ------------------------------------------------------------------------------------------
 local function setupLighting()
@@ -2119,13 +2514,16 @@ local function setupLighting()
 	pcall(function()
 		Lighting.Technology = Enum.Technology.Future
 	end)
+	-- Clean, readable render: enough ambient fill that corners never go black, soft shadows,
+	-- light haze, neutral grade, a touch of depth blur. The lamps carry the warmth.
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
-	Lighting.Ambient = Color3.fromRGB(16, 13, 11)
-	Lighting.OutdoorAmbient = Color3.fromRGB(10, 12, 13)
-	Lighting.EnvironmentDiffuseScale = 0.15
-	Lighting.EnvironmentSpecularScale = 0.4
+	Lighting.Ambient = Color3.fromRGB(40, 39, 37)
+	Lighting.OutdoorAmbient = Color3.fromRGB(24, 28, 30)
+	Lighting.EnvironmentDiffuseScale = 0.2
+	Lighting.EnvironmentSpecularScale = 0.6
 	Lighting.GlobalShadows = true
+	Lighting.ShadowSoftness = 0.35
 	Lighting.ExposureCompensation = 0.3
 
 	for _, child in Lighting:GetChildren() do
@@ -2134,19 +2532,19 @@ local function setupLighting()
 		end
 	end
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.36
+	atmosphere.Density = 0.22
 	atmosphere.Offset = 0
-	atmosphere.Color = Color3.fromRGB(52, 62, 62)
-	atmosphere.Decay = Color3.fromRGB(20, 28, 30)
+	atmosphere.Color = Color3.fromRGB(62, 62, 58)
+	atmosphere.Decay = Color3.fromRGB(28, 32, 34)
 	atmosphere.Glare = 0
-	atmosphere.Haze = 1.6
+	atmosphere.Haze = 0.6
 	atmosphere.Parent = Lighting
 
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.TintColor = Color3.fromRGB(255, 240, 226)
-	cc.Contrast = 0.1
-	cc.Saturation = -0.1
-	cc.Brightness = 0.02
+	cc.TintColor = Color3.fromRGB(255, 246, 236)
+	cc.Contrast = 0.16
+	cc.Saturation = -0.04
+	cc.Brightness = 0
 	cc.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
@@ -2154,6 +2552,13 @@ local function setupLighting()
 	bloom.Size = 32
 	bloom.Threshold = 1.25 -- low enough that the amber lamp cores bloom into a soft halo
 	bloom.Parent = Lighting
+
+	local dof = Instance.new("DepthOfFieldEffect")
+	dof.FarIntensity = 0.18
+	dof.FocusDistance = 28
+	dof.InFocusRadius = 35
+	dof.NearIntensity = 0
+	dof.Parent = Lighting
 end
 
 function LobbyBuilder.build()
@@ -2171,6 +2576,7 @@ function LobbyBuilder.build()
 	local root = Instance.new("Model")
 	root.Name = "Lobby"
 	buildShell(root)
+	buildFinishes(root)
 	buildStairs(root)
 	buildStacks(root)
 	buildShop(root)
@@ -2179,6 +2585,7 @@ function LobbyBuilder.build()
 	buildFurnace(root)
 	buildLeaderboard(root)
 	buildDoorWall(root)
+	buildClutter(root)
 	buildNatatorium(root)
 	root.Parent = workspace
 
