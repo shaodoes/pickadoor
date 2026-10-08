@@ -22,3 +22,26 @@ LanternService.start()
 require(script.Parent.ShopService).start()
 require(script.Parent.QueueService).start(lobby)
 require(script.Parent.LeaderboardService).start(lobby)
+
+-- Lights tagged with a "Flicker" attribute by the builder: the furnace breathes, one bulb won't stay on.
+task.spawn(function()
+	local lights = {}
+	for _, inst in lobby:GetDescendants() do
+		if inst:IsA("Light") and inst:GetAttribute("Flicker") then
+			table.insert(lights, { light = inst, base = inst.Brightness, kind = inst:GetAttribute("Flicker") })
+		end
+	end
+	while true do
+		for _, entry in lights do
+			if entry.kind == "furnace" then
+				entry.light.Brightness = entry.base * (0.8 + math.random() * 0.35)
+			elseif math.random() < 0.06 then
+				entry.light.Brightness = 0
+				task.delay(0.05 + math.random() * 0.25, function()
+					entry.light.Brightness = entry.base
+				end)
+			end
+		end
+		task.wait(0.12)
+	end
+end)

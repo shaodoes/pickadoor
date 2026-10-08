@@ -42,7 +42,8 @@ local keysLabel = UIKit.label({
 	TextXAlignment = Enum.TextXAlignment.Center,
 	BackgroundTransparency = 0.15,
 	BackgroundColor3 = Colors.bg,
-	Position = UDim2.fromOffset(16, 8),
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 16, 1, -16), -- bottom-left, clear of Roblox's chat window
 	Size = UDim2.fromOffset(190, 44),
 	Parent = gui,
 })

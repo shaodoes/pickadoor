@@ -1,16 +1,19 @@
 --[[
-	Builds the basement library lobby into Workspace.Lobby and sets up Lighting.
+	Builds the lobby: a basement that someone turned into a library. Low joist ceiling, pipes and
+	ducts, concrete floor, painted cinderblock, steel posts, bare bulbs. Bookcases and metal racks
+	of boxed books. Six mismatched doors set into the back wall that shouldn't be there.
 
 	Run from the Studio command bar (or MCP) to bake it into the place:
 		require(game.ServerStorage.Builders.LobbyBuilder).build()
 	The lobby server also calls build() at runtime if Workspace.Lobby is missing.
 
-	Layout (top-down, +Z is the entrance, -Z is the door wall):
-		z = +100  entrance stairs + spawn
-		z ~ +72   shop desk (left)      lantern bench (right)
-		z +60..-30 central carpet aisle with arches; book stacks either side;
-		           reading nooks under basement windows (left); mezzanine + leaderboard (right)
-		z = -100  door wall: Wing A (Solo/Duo/Squad) | PICK A DOOR clock | Wing B (Solo/Duo/Squad)
+	Layout (top-down, +Z is the front, -Z is the door wall):
+		front-right   open wooden stairs down from the ground-floor door (spawn on the landing)
+		front-left    checkout desk + card catalogs (Shop)
+		left wall     workbench + pegboard of lanterns (Lanterns); reading nook at the back
+		right wall    chalkboard leaderboard; furnace + water heater at the back
+		middle        rug-covered walkway under the steel girder; rows of bookcases and racks
+		back wall     Wing A (Solo/Duo/Squad) | clock + "PICK A DOOR" stencil | Wing B
 ]]
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,24 +25,28 @@ local LanternBuilder = require(Shared.LanternBuilder)
 
 local LobbyBuilder = {}
 
-local HALF_X, HALF_Z, CEILING = 60, 100, 32
+local HALF_X, HALF_Z, CEILING = 50, 70, 16
 
 local C = {
-	floor = Color3.fromRGB(86, 50, 32),
-	wood = Color3.fromRGB(62, 38, 25),
-	darkWood = Color3.fromRGB(38, 24, 16),
-	midWood = Color3.fromRGB(96, 60, 38),
-	trim = Color3.fromRGB(156, 116, 58),
-	carpet = Color3.fromRGB(116, 30, 27),
-	brick = Color3.fromRGB(74, 50, 40),
-	metal = Color3.fromRGB(36, 33, 30),
+	concrete = Color3.fromRGB(104, 98, 90),
+	block = Color3.fromRGB(150, 140, 122), -- painted cinderblock
+	blockLow = Color3.fromRGB(96, 86, 74), -- grime band along the floor
+	joist = Color3.fromRGB(92, 66, 44),
+	wood = Color3.fromRGB(78, 52, 34),
+	darkWood = Color3.fromRGB(48, 32, 22),
+	midWood = Color3.fromRGB(112, 78, 50),
+	steel = Color3.fromRGB(70, 70, 72),
+	rust = Color3.fromRGB(120, 52, 36),
+	duct = Color3.fromRGB(150, 150, 146),
+	pipe = Color3.fromRGB(150, 96, 60), -- copper
+	cardboard = Color3.fromRGB(156, 118, 78),
 	brass = Color3.fromRGB(150, 112, 56),
-	warm = Color3.fromRGB(255, 168, 88),
-	glow = Color3.fromRGB(255, 212, 150),
+	warm = Color3.fromRGB(255, 166, 86),
+	bulb = Color3.fromRGB(255, 214, 160),
+	paint = Color3.fromRGB(214, 204, 182),
+	redPaint = Color3.fromRGB(150, 40, 32),
+	chalkboard = Color3.fromRGB(36, 48, 40),
 	window = Color3.fromRGB(110, 140, 190),
-	fabric = Color3.fromRGB(110, 36, 34),
-	marble = Color3.fromRGB(96, 86, 80),
-	screen = Color3.fromRGB(70, 175, 135),
 }
 
 local BOOK_COLORS = {
@@ -93,24 +100,22 @@ local function pointLight(parent: Instance, range: number, brightness: number, s
 	return light
 end
 
-local function surfaceText(part: BasePart, face: Enum.NormalId, text: string, textSize: number?, color: Color3?)
+local function surfaceText(part: BasePart, face: Enum.NormalId, text: string, font: Enum.Font?, color: Color3?)
 	local gui = Instance.new("SurfaceGui")
+	gui.Name = "SurfaceGui"
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 50
-	gui.LightInfluence = 0.6
+	gui.LightInfluence = 1
 	gui.Parent = part
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.Garamond
+	label.Font = font or Enum.Font.SpecialElite
 	label.Text = text
-	label.TextColor3 = color or C.glow
-	label.TextScaled = textSize == nil
-	if textSize then
-		label.TextSize = textSize
-	end
+	label.TextColor3 = color or C.paint
+	label.TextScaled = true
 	label.Parent = gui
 	return gui, label
 end
@@ -127,118 +132,236 @@ local function prompt(part: BasePart, objectText: string, actionText: string, pa
 	return p
 end
 
+-- Bare bulb hanging on a cord from the joists.
+local function bareBulb(parent: Instance, pos: Vector3, range: number, brightness: number, shadows: boolean)
+	local model = folder(parent, "Bulb")
+	box(
+		model,
+		"Cord",
+		Vector3.new(0.08, CEILING - pos.Y, 0.08),
+		Vector3.new(pos.X, (CEILING + pos.Y) / 2, pos.Z),
+		Color3.fromRGB(20, 20, 20),
+		nil,
+		DETAIL
+	)
+	box(
+		model,
+		"Socket",
+		Vector3.new(0.3, 0.35, 0.3),
+		pos + Vector3.new(0, 0.45, 0),
+		Color3.fromRGB(30, 28, 26),
+		Enum.Material.Metal,
+		DETAIL
+	)
+	local bulb = box(model, "Glass", Vector3.new(0.45, 0.6, 0.45), pos, C.bulb, Enum.Material.Neon, DETAIL)
+	bulb.Shape = Enum.PartType.Ball
+	pointLight(bulb, range, brightness, shadows)
+	return model, bulb
+end
+
+-- Wall-mounted caged work light (faces +Z of `cf`).
+local function cagedLight(parent: Instance, cf: CFrame, range: number, brightness: number)
+	local model = folder(parent, "CagedLight")
+	box(model, "Mount", Vector3.new(0.6, 0.6, 0.3), cf, C.steel, Enum.Material.Metal, DETAIL)
+	local bulb =
+		box(model, "Bulb", Vector3.new(0.5, 0.5, 0.5), cf * CFrame.new(0, 0, 0.5), C.bulb, Enum.Material.Neon, DETAIL)
+	bulb.Shape = Enum.PartType.Ball
+	for _, a in { 0, 90 } do
+		box(
+			model,
+			"Cage",
+			Vector3.new(0.08, 0.8, 0.8),
+			cf * CFrame.new(0, 0, 0.5) * CFrame.Angles(0, 0, math.rad(a)),
+			Color3.fromRGB(30, 30, 30),
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+	pointLight(bulb, range, brightness, false)
+	return model
+end
+
 ------------------------------------------------------------------------------------------
--- Shell: floor, walls, ceiling, beams, pipes, basement windows
+-- Shell: concrete floor, cinderblock walls, joists, girder + posts, ducts, pipes, stairwell
 ------------------------------------------------------------------------------------------
+local STAIR = { x0 = 24, x1 = 50, z0 = 60, z1 = HALF_Z } -- opening in the ceiling over the stairs
+
 local function buildShell(root: Instance)
 	local shell = folder(root, "Shell")
-	box(
-		shell,
-		"Floor",
-		Vector3.new(HALF_X * 2 + 4, 2, HALF_Z * 2 + 4),
-		Vector3.new(0, -1, 0),
-		C.floor,
-		Enum.Material.WoodPlanks
-	)
-	box(
-		shell,
-		"Ceiling",
-		Vector3.new(HALF_X * 2 + 4, 2, HALF_Z * 2 + 4),
-		Vector3.new(0, CEILING + 1, 0),
-		C.darkWood,
-		Enum.Material.Wood
-	)
+	local W, D = HALF_X * 2, HALF_Z * 2
+	box(shell, "Floor", Vector3.new(W + 4, 2, D + 4), Vector3.new(0, -1, 0), C.concrete, Enum.Material.Concrete)
 
-	local wallH = CEILING + 2
+	-- ceiling with a hole for the stairwell
+	local function ceiling(x0, x1, z0, z1)
+		box(
+			shell,
+			"Ceiling",
+			Vector3.new(x1 - x0, 1, z1 - z0),
+			Vector3.new((x0 + x1) / 2, CEILING + 0.5, (z0 + z1) / 2),
+			C.joist,
+			Enum.Material.WoodPlanks
+		)
+	end
+	ceiling(-HALF_X - 2, STAIR.x0, -HALF_Z - 2, HALF_Z + 2)
+	ceiling(STAIR.x0, HALF_X + 2, -HALF_Z - 2, STAIR.z0)
+
+	-- cinderblock walls with a grime band and a few water stains
+	local wallH = CEILING + 1
 	for _, s in { -1, 1 } do
 		box(
 			shell,
 			"WallX",
-			Vector3.new(2, wallH, HALF_Z * 2 + 4),
-			Vector3.new(s * (HALF_X + 1), wallH / 2 - 1, 0),
-			C.wood,
-			Enum.Material.WoodPlanks
+			Vector3.new(2, wallH, D + 4),
+			Vector3.new(s * (HALF_X + 1), wallH / 2, 0),
+			C.block,
+			Enum.Material.Brick
 		)
 		box(
 			shell,
 			"WallZ",
-			Vector3.new(HALF_X * 2 + 4, wallH, 2),
-			Vector3.new(0, wallH / 2 - 1, s * (HALF_Z + 1)),
-			C.wood,
-			Enum.Material.WoodPlanks
+			Vector3.new(W + 4, wallH, 2),
+			Vector3.new(0, wallH / 2, s * (HALF_Z + 1)),
+			C.block,
+			Enum.Material.Brick
 		)
-		-- brick wainscot band + brass rail
 		box(
 			shell,
-			"BrickX",
-			Vector3.new(0.4, 8, HALF_Z * 2),
-			Vector3.new(s * (HALF_X - 0.2), 4, 0),
-			C.brick,
-			Enum.Material.Brick,
+			"GrimeX",
+			Vector3.new(0.2, 1.4, D),
+			Vector3.new(s * (HALF_X - 0.1), 0.7, 0),
+			C.blockLow,
+			Enum.Material.Concrete,
 			DETAIL
 		)
 		box(
 			shell,
-			"BrickZ",
-			Vector3.new(HALF_X * 2, 8, 0.4),
-			Vector3.new(0, 4, s * (HALF_Z - 0.2)),
-			C.brick,
-			Enum.Material.Brick,
+			"GrimeZ",
+			Vector3.new(W, 1.4, 0.2),
+			Vector3.new(0, 0.7, s * (HALF_Z - 0.1)),
+			C.blockLow,
+			Enum.Material.Concrete,
 			DETAIL
 		)
+	end
+	for _, spec in { { -1, 22, 5 }, { -1, -12, 3 }, { 1, 0, 4 }, { 1, -52, 6 } } do
 		box(
 			shell,
-			"RailX",
-			Vector3.new(0.6, 0.4, HALF_Z * 2),
-			Vector3.new(s * (HALF_X - 0.3), 8.2, 0),
-			C.trim,
-			Enum.Material.Wood,
-			DETAIL
+			"WaterStain",
+			Vector3.new(0.1, spec[3] * 1.6, spec[3]),
+			Vector3.new(spec[1] * (HALF_X - 0.05), CEILING - spec[3] * 0.8, spec[2]),
+			Color3.fromRGB(90, 84, 70),
+			Enum.Material.Concrete,
+			{
+				Transparency = 0.45,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			}
 		)
+	end
+
+	-- floor joists every 3 studs, running side to side
+	for z = -HALF_Z + 1.5, HALF_Z - 1.5, 3 do
+		local overStairs = z > STAIR.z0 and z < STAIR.z1
+		local x1 = overStairs and STAIR.x0 or HALF_X
 		box(
 			shell,
-			"RailZ",
-			Vector3.new(HALF_X * 2, 0.4, 0.6),
-			Vector3.new(0, 8.2, s * (HALF_Z - 0.3)),
-			C.trim,
+			"Joist",
+			Vector3.new(x1 + HALF_X, 1.2, 0.5),
+			Vector3.new((x1 - HALF_X) / 2, CEILING - 0.6, z),
+			C.joist,
 			Enum.Material.Wood,
 			DETAIL
 		)
 	end
 
-	-- heavy cross beams + two long beams: low, oppressive basement ceiling
-	for z = -96, 96, 12 do
+	-- steel girder down the middle, carried by rust-red lally columns
+	box(
+		shell,
+		"Girder",
+		Vector3.new(1.2, 1.4, D),
+		Vector3.new(0, CEILING - 1.9, 0),
+		C.steel,
+		Enum.Material.Metal,
+		{ CanCollide = false }
+	)
+	box(
+		shell,
+		"GirderFlange",
+		Vector3.new(2, 0.2, D),
+		Vector3.new(0, CEILING - 2.6, 0),
+		C.steel,
+		Enum.Material.Metal,
+		DETAIL
+	)
+	for _, z in { 50, 26, 2, -22, -46 } do
 		box(
 			shell,
-			"Beam",
-			Vector3.new(HALF_X * 2, 1.6, 1.6),
-			Vector3.new(0, CEILING - 0.8, z),
-			C.darkWood,
-			Enum.Material.Wood,
-			DETAIL
+			"LallyColumn",
+			Vector3.new(CEILING - 2.7, 0.7, 0.7),
+			CFrame.new(0, (CEILING - 2.7) / 2, z) * CFrame.Angles(0, 0, math.rad(90)),
+			C.rust,
+			Enum.Material.Metal,
+			{
+				Shape = Enum.PartType.Cylinder,
+			}
 		)
-	end
-	for _, x in { -22, 22 } do
 		box(
 			shell,
-			"LongBeam",
-			Vector3.new(1.6, 1.6, HALF_Z * 2),
-			Vector3.new(x, CEILING - 2.4, 0),
-			C.darkWood,
-			Enum.Material.Wood,
+			"ColumnPlate",
+			Vector3.new(1.4, 0.2, 1.4),
+			Vector3.new(0, 0.1, z),
+			C.steel,
+			Enum.Material.Metal,
 			DETAIL
 		)
 	end
 
-	-- exposed pipes (cylinders run along X by default; yaw 90deg to run along Z)
+	-- HVAC duct and pipes along the length (cylinders run along X by default; yaw 90 to run along Z)
 	local alongZ = CFrame.Angles(0, math.rad(90), 0)
-	for _, spec in { { -34, 29.6, 1.3 }, { -31, 29.9, 0.7 }, { 34, 29.6, 1.3 } } do
+	box(
+		shell,
+		"Duct",
+		Vector3.new(3.2, 2, D - 30),
+		Vector3.new(-9, CEILING - 2.2, -15),
+		C.duct,
+		Enum.Material.Metal,
+		{ CanCollide = false }
+	)
+	for z = -40, 50, 15 do
+		box(
+			shell,
+			"DuctSeam",
+			Vector3.new(3.4, 2.2, 0.2),
+			Vector3.new(-9, CEILING - 2.2, z),
+			Color3.fromRGB(120, 120, 116),
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+	box(
+		shell,
+		"DuctBranch",
+		Vector3.new(28, 1.6, 2.4),
+		Vector3.new(-25, CEILING - 2.2, 10),
+		C.duct,
+		Enum.Material.Metal,
+		DETAIL
+	)
+	for _, spec in
+		{
+			{ 9, CEILING - 1.8, 0.8, C.pipe, HALF_Z },
+			{ 10.4, CEILING - 1.7, 0.5, C.pipe, HALF_Z },
+			{ 30, CEILING - 1.6, 1.1, C.steel, STAIR.z0 - 1 }, -- turns up into the floor above before the stairwell
+		}
+	do
+		local zEnd = spec[5]
 		box(
 			shell,
 			"Pipe",
-			Vector3.new(HALF_Z * 2, spec[3], spec[3]),
-			CFrame.new(spec[1], spec[2], 0) * alongZ,
-			C.metal,
+			Vector3.new(zEnd + HALF_Z, spec[3], spec[3]),
+			CFrame.new(spec[1], spec[2], (zEnd - HALF_Z) / 2) * alongZ,
+			spec[4],
 			Enum.Material.Metal,
 			{
 				Shape = Enum.PartType.Cylinder,
@@ -247,69 +370,237 @@ local function buildShell(root: Instance)
 			}
 		)
 	end
+	box(
+		shell,
+		"PipeElbow",
+		Vector3.new(0.9 + 1.1, 1.1, 1.1),
+		CFrame.new(30, CEILING - 0.9, STAIR.z0 - 1) * CFrame.Angles(0, 0, math.rad(90)),
+		C.steel,
+		Enum.Material.Metal,
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+		}
+	)
+	-- pipe across the back wall, above the doors
+	box(
+		shell,
+		"BackPipe",
+		Vector3.new(W, 0.7, 0.7),
+		CFrame.new(0, CEILING - 1.7, -HALF_Z + 0.8),
+		C.pipe,
+		Enum.Material.Metal,
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+		}
+	)
 
-	-- small high basement windows on the left wall: cold moonlight against the warm lamps
-	for _, z in { -60, -30, 0, 30, 60 } do
-		local glass = box(
-			shell,
-			"BasementWindow",
-			Vector3.new(0.3, 3.6, 8),
-			Vector3.new(-HALF_X + 0.15, 26, z),
-			C.window,
-			Enum.Material.Glass,
-			{
-				Transparency = 0.15,
-				CanCollide = false,
-			}
-		)
-		for _, dz in { -4.2, 4.2 } do
+	-- window wells high on both side walls: thin cold moonlight against the warm bulbs
+	for _, s in { -1, 1 } do
+		for _, z in { -36, 22 } do
+			local glass = box(
+				shell,
+				"WindowWell",
+				Vector3.new(0.3, 2.2, 5),
+				Vector3.new(s * (HALF_X - 0.15), CEILING - 2, z),
+				C.window,
+				Enum.Material.Glass,
+				{
+					Transparency = 0.2,
+					CanCollide = false,
+				}
+			)
 			box(
 				shell,
 				"WindowFrame",
-				Vector3.new(0.6, 4.4, 0.4),
-				Vector3.new(-HALF_X + 0.3, 26, z + dz),
+				Vector3.new(0.5, 2.8, 5.6),
+				Vector3.new(s * (HALF_X - 0.05), CEILING - 2, z),
 				C.darkWood,
 				Enum.Material.Wood,
 				DETAIL
 			)
+			local light = Instance.new("SurfaceLight")
+			light.Face = s < 0 and Enum.NormalId.Right or Enum.NormalId.Left
+			light.Color = Color3.fromRGB(120, 150, 215)
+			light.Brightness = 0.7
+			light.Range = 14
+			light.Angle = 70
+			light.Parent = glass
 		end
-		for _, dy in { -2, 2 } do
-			box(
-				shell,
-				"WindowFrame",
-				Vector3.new(0.6, 0.4, 8.8),
-				Vector3.new(-HALF_X + 0.3, 26 + dy, z),
-				C.darkWood,
-				Enum.Material.Wood,
-				DETAIL
-			)
-		end
-		box(
-			shell,
-			"WindowBar",
-			Vector3.new(0.5, 3.6, 0.2),
-			Vector3.new(-HALF_X + 0.3, 26, z),
-			C.darkWood,
-			Enum.Material.Wood,
-			DETAIL
-		)
-		local light = Instance.new("SurfaceLight")
-		light.Face = Enum.NormalId.Right
-		light.Color = Color3.fromRGB(120, 150, 215)
-		light.Brightness = 0.9
-		light.Range = 20
-		light.Angle = 70
-		light.Shadows = true
-		light.Parent = glass
 	end
 end
 
 ------------------------------------------------------------------------------------------
--- Bookshelves
+-- Stairs: open wooden stairs down from the ground floor door
 ------------------------------------------------------------------------------------------
--- A shelf unit centered at `cf` (base on floor), long along local X, books facing local +Z
--- (and -Z too when double-sided).
-local function shelfUnit(
+local function buildStairs(root: Instance)
+	local stairs = folder(root, "Stairs")
+	local zA, zB = 62, 68 -- tread width
+	local zc = (zA + zB) / 2
+	local steps, run = 15, 1.2
+	local xBottom = STAIR.x0 + 2
+	for i = 1, steps do
+		local x = xBottom + (i - 0.5) * run
+		box(
+			stairs,
+			"Tread",
+			Vector3.new(run + 0.1, 0.3, zB - zA),
+			Vector3.new(x, i - 0.15, zc),
+			C.midWood,
+			Enum.Material.WoodPlanks
+		)
+	end
+	local xTop = xBottom + steps * run
+	box(
+		stairs,
+		"Landing",
+		Vector3.new(HALF_X - xTop, 1, zB - zA + 2),
+		Vector3.new((xTop + HALF_X) / 2, CEILING - 0.5, zc),
+		C.midWood,
+		Enum.Material.WoodPlanks
+	)
+
+	-- stringers + railing along the open side
+	local bottom, top = Vector3.new(xBottom, 0, zA - 0.2), Vector3.new(xTop, steps, zA - 0.2)
+	local mid, len = (bottom + top) / 2, (top - bottom).Magnitude
+	for _, dz in { 0, zB - zA + 0.4 } do
+		box(
+			stairs,
+			"Stringer",
+			Vector3.new(0.3, 1, len),
+			CFrame.lookAt(mid + Vector3.new(0, 0, dz), top + Vector3.new(0, 0, dz)),
+			C.darkWood,
+			Enum.Material.Wood
+		)
+	end
+	box(
+		stairs,
+		"Handrail",
+		Vector3.new(0.3, 0.3, len),
+		CFrame.lookAt(mid + Vector3.new(0, 3.2, -0.3), top + Vector3.new(0, 3.2, -0.3)),
+		C.wood,
+		Enum.Material.Wood
+	)
+	for i = 0, 5 do
+		local p = bottom:Lerp(top, i / 5) + Vector3.new(0, 1.6, -0.3)
+		box(stairs, "Post", Vector3.new(0.25, 3.2, 0.25), p, C.darkWood, Enum.Material.Wood, DETAIL)
+	end
+
+	-- the stairwell shaft above the ceiling, lit from the house upstairs
+	local shaftTop = CEILING + 12
+	box(
+		stairs,
+		"ShaftWall",
+		Vector3.new(HALF_X - STAIR.x0 + 2, shaftTop - CEILING, 1),
+		Vector3.new((STAIR.x0 + HALF_X) / 2 + 1, (CEILING + shaftTop) / 2, STAIR.z0 - 0.5),
+		C.block,
+		Enum.Material.Plaster
+	)
+	box(
+		stairs,
+		"ShaftWall",
+		Vector3.new(1, shaftTop - CEILING, STAIR.z1 - STAIR.z0 + 2),
+		Vector3.new(STAIR.x0 - 0.5, (CEILING + shaftTop) / 2, (STAIR.z0 + STAIR.z1) / 2),
+		C.block,
+		Enum.Material.Plaster
+	)
+	box(
+		stairs,
+		"ShaftWall",
+		Vector3.new(1, shaftTop - CEILING, STAIR.z1 - STAIR.z0 + 2),
+		Vector3.new(HALF_X + 0.5, (CEILING + shaftTop) / 2, (STAIR.z0 + STAIR.z1) / 2),
+		C.block,
+		Enum.Material.Plaster
+	)
+	box(
+		stairs,
+		"ShaftWall",
+		Vector3.new(HALF_X - STAIR.x0 + 2, shaftTop - CEILING, 1),
+		Vector3.new((STAIR.x0 + HALF_X) / 2 + 1, (CEILING + shaftTop) / 2, STAIR.z1 + 0.5),
+		C.block,
+		Enum.Material.Plaster
+	)
+	box(
+		stairs,
+		"ShaftCeiling",
+		Vector3.new(HALF_X - STAIR.x0 + 2, 1, STAIR.z1 - STAIR.z0 + 2),
+		Vector3.new((STAIR.x0 + HALF_X) / 2 + 1, shaftTop + 0.5, (STAIR.z0 + STAIR.z1) / 2),
+		C.block,
+		Enum.Material.Plaster
+	)
+	box(
+		stairs,
+		"UpstairsDoor",
+		Vector3.new(0.4, 8, 4),
+		Vector3.new(HALF_X - 0.2, CEILING + 4, zc),
+		C.darkWood,
+		Enum.Material.Wood
+	)
+	box(
+		stairs,
+		"DoorFrame",
+		Vector3.new(0.3, 8.6, 4.8),
+		Vector3.new(HALF_X - 0.05, CEILING + 4.3, zc),
+		C.wood,
+		Enum.Material.Wood,
+		DETAIL
+	)
+	bareBulb(stairs, Vector3.new(40, shaftTop - 2.5, zc), 26, 1.8, true)
+
+	-- clutter under the stairs
+	for i, spec in { { 30, 1.5, 65, 3 }, { 33.2, 1.25, 64.2, 2.5 }, { 30.4, 3.6, 65.2, 1.5 } } do
+		box(
+			stairs,
+			"Box",
+			Vector3.new(spec[4], spec[4], spec[4]),
+			CFrame.new(spec[1], spec[2], spec[3]) * CFrame.Angles(0, math.rad(i * 13), 0),
+			C.cardboard,
+			Enum.Material.Cardboard
+		)
+	end
+
+	local spawnPoint = Instance.new("SpawnLocation")
+	spawnPoint.Name = "Spawn"
+	spawnPoint.Anchored = true
+	spawnPoint.Size = Vector3.new(4, 0.2, 4)
+	-- on the landing, facing -X so players look down the stairs into the basement
+	spawnPoint.CFrame = CFrame.new((xTop + HALF_X) / 2, CEILING + 0.1, zc) * CFrame.Angles(0, math.rad(90), 0)
+	spawnPoint.Transparency = 1
+	spawnPoint.CanCollide = false
+	spawnPoint.CanQuery = false
+	spawnPoint.Neutral = true
+	spawnPoint.Duration = 0
+	spawnPoint.Parent = stairs
+end
+
+------------------------------------------------------------------------------------------
+-- Shelving: wooden bookcases and metal racks of boxed books
+------------------------------------------------------------------------------------------
+local function fillBooks(parent: Instance, at, length: number, y: number, zCenter: number, depth: number)
+	local x = -length / 2 + 0.2
+	while x < length / 2 - 0.4 do
+		local width = math.min(rng:NextNumber(1.1, 3.0), length / 2 - 0.2 - x)
+		local roll = rng:NextNumber()
+		if roll > 0.12 then
+			local h = rng:NextNumber(1.3, 2.0)
+			local lean = roll > 0.92 and math.rad(rng:NextNumber(-14, 14)) or 0
+			box(
+				parent,
+				"Books",
+				Vector3.new(width - 0.05, h, depth),
+				at(x + width / 2, y + h / 2, zCenter) * CFrame.Angles(0, 0, lean),
+				BOOK_COLORS[rng:NextInteger(1, #BOOK_COLORS)],
+				Enum.Material.Fabric,
+				DETAIL
+			)
+		end
+		x += width
+	end
+end
+
+-- Bookcase centered at `cf` (base on floor), long along local X, books facing local +Z (and -Z if doubleSided).
+local function bookcase(
 	parent: Instance,
 	cf: CFrame,
 	length: number,
@@ -317,7 +608,7 @@ local function shelfUnit(
 	depth: number,
 	doubleSided: boolean
 )
-	local unit = folder(parent, "Bookshelf")
+	local unit = folder(parent, "Bookcase")
 	local function at(x, y, z)
 		return cf * CFrame.new(x, y, z)
 	end
@@ -333,244 +624,214 @@ local function shelfUnit(
 		box(
 			unit,
 			"Side",
-			Vector3.new(0.6, height, depth),
-			at(s * (length / 2 + 0.3), height / 2, 0),
+			Vector3.new(0.5, height, depth),
+			at(s * (length / 2 + 0.25), height / 2, 0),
 			C.wood,
 			Enum.Material.Wood
 		)
 	end
-	box(unit, "Top", Vector3.new(length + 1.4, 0.6, depth + 0.4), at(0, height + 0.3, 0), C.wood, Enum.Material.Wood)
-	box(unit, "Plinth", Vector3.new(length, 0.6, depth), at(0, 0.3, 0), C.darkWood, Enum.Material.Wood)
-
-	local levels = math.floor((height - 0.6) / 2.6)
-	local sides = doubleSided and { 1, -1 } or { 1 }
+	box(unit, "Top", Vector3.new(length + 1, 0.4, depth + 0.2), at(0, height + 0.2, 0), C.wood, Enum.Material.Wood)
+	box(unit, "Plinth", Vector3.new(length, 0.5, depth), at(0, 0.25, 0), C.darkWood, Enum.Material.Wood)
+	local levels = math.floor((height - 0.5) / 2.4)
 	for level = 0, levels - 1 do
-		local y = 0.6 + level * 2.6
+		local y = 0.5 + level * 2.4
 		if level > 0 then
 			box(
 				unit,
 				"Shelf",
-				Vector3.new(length, 0.25, depth),
+				Vector3.new(length, 0.2, depth),
 				at(0, y, 0),
 				C.wood,
 				Enum.Material.Wood,
 				{ CastShadow = false }
 			)
 		end
-		for _, side in sides do
-			local bookDepth = doubleSided and (depth / 2 - 0.45) or (depth - 0.7)
-			local zCenter = doubleSided and side * (0.15 + bookDepth / 2 + 0.1) or 0.25
-			local x = -length / 2 + 0.2
-			while x < length / 2 - 0.4 do
-				local width = rng:NextNumber(1.1, 3.0)
-				width = math.min(width, length / 2 - 0.2 - x)
-				if rng:NextNumber() > 0.1 then
-					local h = rng:NextNumber(1.4, 2.2)
+		local y0 = y + 0.1
+		if doubleSided then
+			local bookDepth = depth / 2 - 0.45
+			for _, side in { 1, -1 } do
+				fillBooks(unit, at, length, y0, side * (0.15 + bookDepth / 2 + 0.1), bookDepth)
+			end
+		else
+			fillBooks(unit, at, length, y0, 0.25, depth - 0.7)
+		end
+	end
+	-- odd things on top: a box, a book pile
+	if rng:NextNumber() > 0.4 then
+		box(
+			unit,
+			"Box",
+			Vector3.new(2, 1.4, 1.6),
+			at(rng:NextNumber(-length / 3, length / 3), height + 1.1, 0),
+			C.cardboard,
+			Enum.Material.Cardboard
+		)
+	end
+	return unit
+end
+
+-- Steel utility rack with cardboard boxes of books and loose piles.
+local function metalRack(parent: Instance, cf: CFrame, length: number, height: number, depth: number)
+	local unit = folder(parent, "Rack")
+	local function at(x, y, z)
+		return cf * CFrame.new(x, y, z)
+	end
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			box(
+				unit,
+				"Upright",
+				Vector3.new(0.25, height, 0.25),
+				at(sx * length / 2, height / 2, sz * depth / 2),
+				C.steel,
+				Enum.Material.Metal
+			)
+		end
+	end
+	for i = 0, 3 do
+		local y = 0.4 + i * (height - 0.6) / 3
+		box(
+			unit,
+			"Shelf",
+			Vector3.new(length, 0.15, depth),
+			at(0, y, 0),
+			Color3.fromRGB(88, 88, 88),
+			Enum.Material.DiamondPlate
+		)
+		local x = -length / 2 + 0.3
+		while x < length / 2 - 1 do
+			local w = math.min(rng:NextNumber(1.6, 2.6), length / 2 - 0.3 - x)
+			local roll = rng:NextNumber()
+			if roll < 0.55 then
+				local h = rng:NextNumber(1.1, 1.6)
+				box(
+					unit,
+					"Box",
+					Vector3.new(w - 0.1, h, depth - 0.3),
+					at(x + w / 2, y + 0.08 + h / 2, 0) * CFrame.Angles(0, math.rad(rng:NextNumber(-4, 4)), 0),
+					C.cardboard:Lerp(Color3.new(0.3, 0.25, 0.2), rng:NextNumber(0, 0.4)),
+					Enum.Material.Cardboard,
+					DETAIL
+				)
+			elseif roll < 0.85 then
+				local pile = rng:NextInteger(2, 5)
+				for k = 1, pile do
 					box(
 						unit,
-						"Books",
-						Vector3.new(width - 0.05, h, bookDepth),
-						at(x + width / 2, y + 0.125 + h / 2, zCenter),
+						"Book",
+						Vector3.new(w * 0.7, 0.28, depth * 0.6),
+						at(x + w / 2, y + 0.08 + (k - 0.5) * 0.29, 0)
+							* CFrame.Angles(0, math.rad(rng:NextNumber(-12, 12)), 0),
 						BOOK_COLORS[rng:NextInteger(1, #BOOK_COLORS)],
 						Enum.Material.Fabric,
 						DETAIL
 					)
 				end
-				x += width
 			end
+			x += w
 		end
 	end
 	return unit
 end
 
--- Single hanging lamp: chain from the ceiling, brass cap, glowing shade.
-local function pendantLamp(parent: Instance, pos: Vector3, range: number, brightness: number)
-	local model = folder(parent, "Pendant")
-	box(
-		model,
-		"Chain",
-		Vector3.new(0.15, CEILING - pos.Y, 0.15),
-		Vector3.new(pos.X, (CEILING + pos.Y) / 2, pos.Z),
-		C.metal,
-		Enum.Material.Metal,
-		DETAIL
-	)
-	box(model, "Cap", Vector3.new(1.4, 0.3, 1.4), pos + Vector3.new(0, 0.35, 0), C.brass, Enum.Material.Metal, DETAIL)
-	local shade = box(model, "Shade", Vector3.new(1.1, 0.7, 1.1), pos, C.glow, Enum.Material.Neon, DETAIL)
-	pointLight(shade, range, brightness, false)
-	return model
-end
-
-local function buildStacks(root: Instance)
-	local stacks = folder(root, "Stacks")
-	-- freestanding double-sided stacks either side of the aisle, perpendicular to it
-	for _, s in { -1, 1 } do
-		for _, z in { 56, 42, 28, 14, 0, -14, -28 } do
-			shelfUnit(stacks, CFrame.new(s * 25, 0, z), 24, 14, 3.2, true)
-		end
-	end
-	-- tall wall shelves on the left wall (facing +X) and the entrance wall
-	local faceRight = CFrame.Angles(0, math.rad(90), 0)
-	for _, z in { 76, 44, 12, -20, -52 } do
-		shelfUnit(stacks, CFrame.new(-HALF_X + 1.8, 0, z) * faceRight, 28, 20, 2.6, false)
-	end
-	local faceBack = CFrame.Angles(0, math.rad(180), 0)
-	for _, x in { -36, 24 } do
-		shelfUnit(stacks, CFrame.new(x, 0, HALF_Z - 1.8) * faceBack, 22, 20, 2.6, false)
-	end
-	-- dim pendants down the gaps between stacks so the side aisles aren't pitch black
-	for _, s in { -1, 1 } do
-		for _, z in { 49, 21, -7 } do
-			pendantLamp(stacks, Vector3.new(s * 25, 18, z), 18, 0.8)
-		end
-	end
-end
-
-------------------------------------------------------------------------------------------
--- Central aisle: carpet runner, arches, chandeliers, lamp posts
-------------------------------------------------------------------------------------------
-local function chandelier(parent: Instance, pos: Vector3)
-	local model = folder(parent, "Chandelier")
-	box(
-		model,
-		"Chain",
-		Vector3.new(0.2, CEILING - pos.Y, 0.2),
-		Vector3.new(pos.X, (CEILING + pos.Y) / 2, pos.Z),
-		C.metal,
-		Enum.Material.Metal,
-		DETAIL
-	)
-	local hub = box(
-		model,
-		"Hub",
-		Vector3.new(1.2, 1.2, 1.2),
-		pos,
-		C.brass,
-		Enum.Material.Metal,
-		{ Shape = Enum.PartType.Ball, CanCollide = false }
-	)
-	for i = 1, 8 do
-		local a = (i / 8) * math.pi * 2
-		local offset = Vector3.new(math.cos(a) * 2.4, -0.4, math.sin(a) * 2.4)
+local function bookPile(parent: Instance, pos: Vector3, count: number)
+	for k = 1, count do
 		box(
-			model,
-			"Arm",
-			Vector3.new(2.4, 0.15, 0.15),
-			CFrame.lookAt(pos + offset / 2, pos + offset) * CFrame.Angles(0, math.rad(90), 0),
-			C.brass,
-			Enum.Material.Metal,
-			DETAIL
-		)
-		box(
-			model,
-			"Candle",
-			Vector3.new(0.25, 0.5, 0.25),
-			pos + offset + Vector3.new(0, 0.3, 0),
-			C.glow,
-			Enum.Material.Neon,
-			DETAIL
-		)
-	end
-	pointLight(hub, 30, 1.7, true)
-end
-
-local function lampPost(parent: Instance, pos: Vector3)
-	local model = folder(parent, "LampPost")
-	box(model, "Base", Vector3.new(1.1, 0.4, 1.1), pos + Vector3.new(0, 0.2, 0), C.metal, Enum.Material.Metal)
-	box(
-		model,
-		"Pole",
-		Vector3.new(5, 0.45, 0.45),
-		CFrame.new(pos + Vector3.new(0, 2.7, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		C.metal,
-		Enum.Material.Metal,
-		{ Shape = Enum.PartType.Cylinder }
-	)
-	local head =
-		box(model, "Lamp", Vector3.new(0.9, 1.1, 0.9), pos + Vector3.new(0, 5.7, 0), C.glow, Enum.Material.Neon, DETAIL)
-	box(model, "Cap", Vector3.new(1.2, 0.25, 1.2), pos + Vector3.new(0, 6.35, 0), C.metal, Enum.Material.Metal, DETAIL)
-	pointLight(head, 15, 1.1, false)
-end
-
-local function buildAisle(root: Instance)
-	local aisle = folder(root, "Aisle")
-	local zFront, zBack = 82, -90
-	local len, mid = zFront - zBack, (zFront + zBack) / 2
-	box(
-		aisle,
-		"Carpet",
-		Vector3.new(16, 0.1, len),
-		Vector3.new(0, 0.05, mid),
-		C.carpet,
-		Enum.Material.Fabric,
-		{ CanCollide = false }
-	)
-	for _, s in { -1, 1 } do
-		box(
-			aisle,
-			"CarpetBorder",
-			Vector3.new(0.6, 0.12, len),
-			Vector3.new(s * 8.3, 0.06, mid),
-			C.trim,
+			parent,
+			"FloorBook",
+			Vector3.new(rng:NextNumber(1.2, 1.7), 0.3, rng:NextNumber(0.9, 1.2)),
+			CFrame.new(pos + Vector3.new(0, (k - 0.5) * 0.31, 0))
+				* CFrame.Angles(0, math.rad(rng:NextNumber(-25, 25)), 0),
+			BOOK_COLORS[rng:NextInteger(1, #BOOK_COLORS)],
 			Enum.Material.Fabric,
 			DETAIL
 		)
 	end
+end
 
-	-- semicircular arches (radius 10) over the aisle
-	local radius, springY, segments = 10, 18, 12
-	for z = 70, -50, -20 do
-		local arch = folder(aisle, "Arch")
-		for _, s in { -1, 1 } do
-			box(
-				arch,
-				"Pillar",
-				Vector3.new(2.4, springY, 2.4),
-				Vector3.new(s * radius, springY / 2, z),
-				C.wood,
-				Enum.Material.Wood
-			)
-			box(
-				arch,
-				"PillarBase",
-				Vector3.new(3, 1, 3),
-				Vector3.new(s * radius, 0.5, z),
-				C.darkWood,
-				Enum.Material.Wood
-			)
-			box(
-				arch,
-				"Capital",
-				Vector3.new(3, 0.6, 3),
-				Vector3.new(s * radius, springY, z),
-				C.trim,
-				Enum.Material.Wood,
-				DETAIL
-			)
+local function buildStacks(root: Instance)
+	local stacks = folder(root, "Stacks")
+	-- rows either side of the walkway; bookcases and racks alternate irregularly
+	local function row(x: number, z: number)
+		local cf = CFrame.new(x, 0, z)
+		if rng:NextNumber() < 0.68 then
+			bookcase(stacks, cf, 13, 9.4, 3, true)
+		else
+			metalRack(stacks, cf, 13, 8, 2.6)
 		end
-		local chord = 2 * radius * math.sin(math.pi / (2 * segments))
-		for i = 0, segments - 1 do
-			local a = math.pi * (i + 0.5) / segments
-			local pos = Vector3.new(math.cos(a) * radius, springY + math.sin(a) * radius, z)
-			box(
-				arch,
-				"ArchSegment",
-				Vector3.new(chord + 0.35, 1.6, 2.4),
-				CFrame.new(pos) * CFrame.Angles(0, 0, a + math.pi / 2),
-				C.wood,
-				Enum.Material.Wood,
-				{ CanCollide = false }
-			)
+	end
+	for _, s in { -1, 1 } do
+		for _, z in { 44, 32, 20, 8, -4, -16 } do
+			row(s * 15, z)
 		end
-		if z > -50 then
-			chandelier(aisle, Vector3.new(0, 23, z - 10))
+		for _, z in { 26, 14, 2 } do
+			row(s * 33, z)
+		end
+	end
+	-- single-sided bookcases against the walls
+	local faceRight, faceLeft, faceBack =
+		CFrame.Angles(0, math.rad(90), 0), CFrame.Angles(0, math.rad(-90), 0), CFrame.Angles(0, math.rad(180), 0)
+	bookcase(stacks, CFrame.new(-HALF_X + 1.4, 0, 14) * faceRight, 22, 11, 2.4, false)
+	bookcase(stacks, CFrame.new(HALF_X - 1.4, 0, 10) * faceLeft, 20, 11, 2.4, false)
+	bookcase(stacks, CFrame.new(-6, 0, HALF_Z - 1.4) * faceBack, 16, 11, 2.4, false)
+	metalRack(stacks, CFrame.new(10, 0, HALF_Z - 1.6) * faceBack, 10, 8, 2.4)
+
+	for _, p in
+		{
+			Vector3.new(-6, 0, 38),
+			Vector3.new(7, 0, 14),
+			Vector3.new(-24, 0, 26),
+			Vector3.new(24, 0, -10),
+			Vector3.new(-7, 0, -22),
+			Vector3.new(41, 0, 20),
+		}
+	do
+		bookPile(stacks, p, rng:NextInteger(3, 7))
+	end
+
+	-- bulbs: down the walkway (with shadows) and over the gaps between rows
+	for _, z in { 56, 44, 32, 20, 8, -4, -16, -28 } do
+		bareBulb(stacks, Vector3.new(2.2, CEILING - 4.2, z + 6), 18, 1.1, true)
+	end
+	for _, s in { -1, 1 } do
+		for _, z in { 38, 14, -10 } do
+			bareBulb(stacks, Vector3.new(s * 15, CEILING - 3.6, z), 15, 0.8, false)
+		end
+		for _, z in { 20, 8 } do
+			bareBulb(stacks, Vector3.new(s * 33, CEILING - 3.6, z), 14, 0.7, false)
 		end
 	end
 
-	for z = 60, -40, -20 do
-		for _, s in { -1, 1 } do
-			lampPost(aisle, Vector3.new(s * 9.3, 0, z))
-		end
+	-- worn rugs overlapping down the walkway
+	for i, spec in
+		{
+			{ 50, 9, 12, 0.05 },
+			{ 34, 8, 14, -0.04 },
+			{ 16, 9, 12, 0.03 },
+			{ -2, 8, 13, -0.06 },
+			{ -20, 9, 12, 0.04 },
+			{ -36, 8, 12, 0 },
+		}
+	do
+		local color = (i % 2 == 0) and Color3.fromRGB(78, 34, 28) or Color3.fromRGB(88, 64, 40)
+		box(
+			stacks,
+			"Rug",
+			Vector3.new(spec[2], 0.06 + i * 0.005, spec[3]),
+			CFrame.new(0, 0.03 + i * 0.005, spec[1]) * CFrame.Angles(0, spec[4], 0),
+			color,
+			Enum.Material.Carpet,
+			{ CanCollide = false, CastShadow = false }
+		)
+		box(
+			stacks,
+			"RugBorder",
+			Vector3.new(spec[2] + 0.6, 0.05 + i * 0.005, spec[3] + 0.6),
+			CFrame.new(0, 0.025 + i * 0.005, spec[1]) * CFrame.Angles(0, spec[4], 0),
+			Color3.fromRGB(60, 30, 22),
+			Enum.Material.Carpet,
+			DETAIL
+		)
 	end
 end
 
@@ -597,7 +858,16 @@ local function chair(parent: Instance, pos: Vector3, yaw: number)
 	end
 end
 
-local function bankerLamp(parent: Instance, pos: Vector3)
+local function armchair(parent: Instance, cf: CFrame, color: Color3)
+	local model = folder(parent, "Armchair")
+	box(model, "Seat", Vector3.new(3.2, 1.6, 3), cf * CFrame.new(0, 1, 0), color, Enum.Material.Fabric)
+	box(model, "Back", Vector3.new(3.2, 3, 0.8), cf * CFrame.new(0, 2.3, 1.2), color, Enum.Material.Fabric)
+	for _, s in { -1, 1 } do
+		box(model, "Arm", Vector3.new(0.6, 2.1, 3), cf * CFrame.new(s * 1.6, 1.3, 0), color, Enum.Material.Fabric)
+	end
+end
+
+local function deskLamp(parent: Instance, pos: Vector3, range: number?)
 	box(
 		parent,
 		"LampBase",
@@ -630,11 +900,11 @@ local function bankerLamp(parent: Instance, pos: Vector3)
 		"LampBulb",
 		Vector3.new(0.8, 0.12, 0.3),
 		pos + Vector3.new(0, 0.85, 0),
-		C.glow,
+		C.bulb,
 		Enum.Material.Neon,
 		DETAIL
 	)
-	pointLight(shade, 9, 1, false)
+	pointLight(shade, range or 9, 1, false)
 end
 
 local function readingTable(parent: Instance, pos: Vector3, yaw: number)
@@ -653,495 +923,449 @@ local function readingTable(parent: Instance, pos: Vector3, yaw: number)
 			)
 		end
 	end
-	bankerLamp(model, (cf * CFrame.new(1.8, 3.18, 0)).Position)
-	box(
-		model,
-		"OpenBook",
-		Vector3.new(1.4, 0.12, 1),
-		cf * CFrame.new(-1.2, 3.23, 0.4) * CFrame.Angles(0, 0.3, 0),
-		Color3.fromRGB(225, 210, 180),
-		Enum.Material.SmoothPlastic,
-		DETAIL
-	)
+	deskLamp(model, (cf * CFrame.new(1.8, 3.18, 0)).Position)
+	bookPile(model, (cf * CFrame.new(-1.6, 3.18, 0.3)).Position, 3)
 	for _, side in { -1, 1 } do
 		chair(model, (cf * CFrame.new(-1.6, 0, side * 2.6)).Position, yaw + (side > 0 and 0 or math.pi))
 		chair(model, (cf * CFrame.new(1.6, 0, side * 2.6)).Position, yaw + (side > 0 and 0 or math.pi))
 	end
 end
 
-local function sofa(parent: Instance, cf: CFrame)
-	local model = folder(parent, "Sofa")
-	box(model, "Seat", Vector3.new(6, 1.4, 2.8), cf * CFrame.new(0, 0.9, 0), C.fabric, Enum.Material.Fabric)
-	box(model, "Back", Vector3.new(6, 2.4, 0.8), cf * CFrame.new(0, 2, 1.2), C.fabric, Enum.Material.Fabric)
-	for _, s in { -1, 1 } do
-		box(model, "Arm", Vector3.new(0.8, 2, 2.8), cf * CFrame.new(s * 3.2, 1.2, 0), C.fabric, Enum.Material.Fabric)
-	end
-	box(model, "Feet", Vector3.new(6.6, 0.2, 2.6), cf * CFrame.new(0, 0.1, 0), C.darkWood, Enum.Material.Wood, DETAIL)
-end
-
-local function railing(parent: Instance, from: Vector3, to: Vector3, height: number)
-	local dir = to - from
-	local len = dir.Magnitude
-	local mid = (from + to) / 2
-	local cf = CFrame.lookAt(mid, to)
-	box(parent, "Handrail", Vector3.new(0.45, 0.3, len), cf + Vector3.new(0, height, 0), C.trim, Enum.Material.Wood)
-	box(
-		parent,
-		"Bottomrail",
-		Vector3.new(0.3, 0.25, len),
-		cf + Vector3.new(0, 0.4, 0),
-		C.darkWood,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	local count = math.floor(len / 2.2)
-	for i = 0, count do
-		local p = from + dir * (i / count)
+------------------------------------------------------------------------------------------
+-- Areas
+------------------------------------------------------------------------------------------
+local function buildShop(root: Instance)
+	local shop = folder(root, "Shop")
+	local cx, cz = -30, 56
+	-- old wooden desk used as a checkout counter, facing the walkway (+X)
+	box(shop, "DeskBody", Vector3.new(3, 3.4, 10), Vector3.new(cx, 1.7, cz), C.wood, Enum.Material.Wood)
+	local top =
+		box(shop, "DeskTop", Vector3.new(3.6, 0.3, 10.6), Vector3.new(cx, 3.55, cz), C.midWood, Enum.Material.Wood)
+	for i = -1, 1 do
 		box(
-			parent,
-			"Baluster",
-			Vector3.new(0.25, height, 0.25),
-			p + Vector3.new(0, height / 2, 0),
+			shop,
+			"Drawer",
+			Vector3.new(0.15, 1.2, 2.6),
+			Vector3.new(cx + 1.55, 2.2, cz + i * 3.2),
 			C.darkWood,
 			Enum.Material.Wood,
 			DETAIL
 		)
-	end
-end
-
-------------------------------------------------------------------------------------------
--- Areas
-------------------------------------------------------------------------------------------
-local function buildReadingNooks(root: Instance)
-	local nooks = folder(root, "Reading")
-	for _, z in { 58, 28, -4, -36 } do
-		readingTable(nooks, Vector3.new(-47, 0, z), math.rad(90))
-	end
-	for _, x in { -26, 26 } do
-		readingTable(nooks, Vector3.new(x, 0, -48), 0)
-	end
-end
-
-local function buildMezzanine(root: Instance)
-	local mez = folder(root, "Mezzanine")
-	local deckY, x0, x1, z0, z1 = 12, 40, HALF_X, -24, 80
-	local cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
-	box(
-		mez,
-		"Deck",
-		Vector3.new(x1 - x0, 1, z1 - z0),
-		Vector3.new(cx, deckY - 0.5, cz),
-		C.floor,
-		Enum.Material.WoodPlanks
-	)
-	box(
-		mez,
-		"Fascia",
-		Vector3.new(0.6, 1.6, z1 - z0),
-		Vector3.new(x0 - 0.3, deckY - 0.8, cz),
-		C.trim,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	box(
-		mez,
-		"Runner",
-		Vector3.new(6, 0.1, z1 - z0 - 6),
-		Vector3.new(cx - 3, deckY + 0.05, cz),
-		C.carpet,
-		Enum.Material.Fabric,
-		DETAIL
-	)
-	for _, z in { z0 + 2, 6, 30, 54, z1 - 2 } do
 		box(
-			mez,
-			"Column",
-			Vector3.new(1.6, deckY - 1, 1.6),
-			Vector3.new(x0 + 1, (deckY - 1) / 2, z),
-			C.wood,
-			Enum.Material.Wood
-		)
-	end
-
-	-- stairs come down toward the entrance (z+), 12 steps of 1 stud
-	local stairX0, stairX1 = 44, 56
-	for k = 1, deckY do
-		local zc = z1 + 15 - (k - 0.5) * 1.25
-		box(
-			mez,
-			"Step",
-			Vector3.new(stairX1 - stairX0, k, 1.25),
-			Vector3.new((stairX0 + stairX1) / 2, k / 2, zc),
-			C.midWood,
-			Enum.Material.WoodPlanks
-		)
-	end
-	railing(mez, Vector3.new(stairX0, 1, z1 + 15), Vector3.new(stairX0, deckY + 1, z1), 3.2)
-
-	railing(mez, Vector3.new(x0 + 0.3, deckY, z0), Vector3.new(x0 + 0.3, deckY, z1), 3.4)
-	railing(mez, Vector3.new(x0, deckY, z0 + 0.3), Vector3.new(x1, deckY, z0 + 0.3), 3.4)
-	railing(mez, Vector3.new(x0, deckY, z1 - 0.3), Vector3.new(stairX0, deckY, z1 - 0.3), 3.4)
-
-	local faceAisle = CFrame.Angles(0, math.rad(-90), 0)
-	sofa(mez, CFrame.new(52, deckY, 62) * CFrame.Angles(0, math.rad(90), 0))
-	sofa(mez, CFrame.new(52, deckY, 6) * CFrame.Angles(0, math.rad(90), 0))
-	shelfUnit(mez, CFrame.new(HALF_X - 1.6, deckY, 66) * faceAisle, 22, 16, 2.4, false)
-	shelfUnit(mez, CFrame.new(HALF_X - 1.6, deckY, -6) * faceAisle, 22, 16, 2.4, false)
-	for _, z in { 46, 14 } do
-		local lampPos = Vector3.new(44, deckY, z)
-		box(
-			mez,
-			"FloorLampPole",
-			Vector3.new(0.3, 5, 0.3),
-			lampPos + Vector3.new(0, 2.5, 0),
+			shop,
+			"Pull",
+			Vector3.new(0.2, 0.2, 0.7),
+			Vector3.new(cx + 1.65, 2.2, cz + i * 3.2),
 			C.brass,
 			Enum.Material.Metal,
 			DETAIL
 		)
-		local shade = box(
-			mez,
-			"FloorLampShade",
-			Vector3.new(1.6, 1.2, 1.6),
-			lampPos + Vector3.new(0, 5.4, 0),
-			Color3.fromRGB(230, 190, 140),
-			Enum.Material.Fabric,
+	end
+	-- card catalog cabinet behind the desk
+	local catX = cx - 4.5
+	box(shop, "CatalogBody", Vector3.new(2.6, 6, 8), Vector3.new(catX, 3, cz), C.midWood, Enum.Material.Wood)
+	for row = 0, 6 do
+		for col = 0, 4 do
+			local y, z = 0.9 + row * 0.75, cz - 3.2 + col * 1.6
+			box(
+				shop,
+				"CatalogDrawer",
+				Vector3.new(0.12, 0.62, 1.45),
+				Vector3.new(catX + 1.31, y, z),
+				C.wood,
+				Enum.Material.Wood,
+				DETAIL
+			)
+			box(
+				shop,
+				"Label",
+				Vector3.new(0.05, 0.2, 0.5),
+				Vector3.new(catX + 1.39, y + 0.1, z),
+				Color3.fromRGB(220, 210, 180),
+				nil,
+				DETAIL
+			)
+		end
+	end
+	-- desk clutter: cash box, bell, ledger, lamp
+	box(
+		shop,
+		"CashBox",
+		Vector3.new(1.2, 0.6, 1.6),
+		Vector3.new(cx - 0.2, 4, cz - 2.5),
+		Color3.fromRGB(60, 80, 64),
+		Enum.Material.Metal,
+		DETAIL
+	)
+	box(
+		shop,
+		"Bell",
+		Vector3.new(0.5, 0.35, 0.5),
+		Vector3.new(cx + 1, 3.88, cz + 0.5),
+		C.brass,
+		Enum.Material.Metal,
+		{ Shape = Enum.PartType.Ball, CanCollide = false }
+	)
+	box(
+		shop,
+		"Ledger",
+		Vector3.new(1.4, 0.2, 2),
+		Vector3.new(cx + 0.2, 3.8, cz + 2.2),
+		Color3.fromRGB(80, 30, 26),
+		Enum.Material.Fabric,
+		DETAIL
+	)
+	deskLamp(shop, Vector3.new(cx - 0.6, 3.7, cz + 4))
+
+	-- hand-painted plank sign hanging from the joists
+	local sign = box(
+		shop,
+		"Sign",
+		Vector3.new(0.3, 1.8, 7),
+		Vector3.new(cx + 1, 10.5, cz),
+		C.midWood,
+		Enum.Material.WoodPlanks,
+		DETAIL
+	)
+	for _, dz in { -3, 3 } do
+		box(
+			shop,
+			"SignChain",
+			Vector3.new(0.08, CEILING - 11.4, 0.08),
+			Vector3.new(cx + 1, (CEILING + 11.4) / 2, cz + dz),
+			C.steel,
+			Enum.Material.Metal,
 			DETAIL
 		)
-		pointLight(shade, 14, 1, false)
 	end
-
-	-- underneath: a dim storage nook with crates
-	for i, z in { 60, 64, 20, 23 } do
-		box(
-			mez,
-			"Crate",
-			Vector3.new(3, 3, 3),
-			CFrame.new(54, 1.5 + (i % 2) * 0, z) * CFrame.Angles(0, math.rad(i * 17), 0),
-			C.midWood,
-			Enum.Material.WoodPlanks
-		)
-	end
-	local bulb =
-		box(mez, "NookBulb", Vector3.new(0.5, 0.6, 0.5), Vector3.new(52, 10.2, 40), C.glow, Enum.Material.Neon, DETAIL)
-	pointLight(bulb, 12, 0.6, true)
+	surfaceText(sign, Enum.NormalId.Right, "SHOP", Enum.Font.SpecialElite, Color3.fromRGB(40, 26, 18))
+	surfaceText(sign, Enum.NormalId.Left, "SHOP", Enum.Font.SpecialElite, Color3.fromRGB(40, 26, 18))
+	bareBulb(shop, Vector3.new(cx + 2.5, 9, cz - 3), 18, 1.2, true)
+	prompt(top, "Checkout Desk", "Browse Shop", "Shop")
 end
 
-local function buildLeaderboard(root: Instance)
-	local board = folder(root, "Leaderboard")
-	local pos = Vector3.new(HALF_X - 0.3, 21, 30)
-	local face = box(board, "Board", Vector3.new(0.4, 11, 22), pos, Color3.fromRGB(22, 15, 11), Enum.Material.Wood)
-	for _, dz in { -11.3, 11.3 } do
+local function buildWorkbench(root: Instance)
+	local bench = folder(root, "LanternBench")
+	local wx, cz = -HALF_X, 40
+	local benchX = wx + 2.2
+	-- heavy workbench against the left wall
+	local top =
+		box(bench, "Top", Vector3.new(4, 0.5, 12), Vector3.new(benchX, 3.25, cz), C.midWood, Enum.Material.WoodPlanks)
+	for _, dz in { -5.6, 5.6 } do
+		for _, dx in { -1.6, 1.6 } do
+			box(
+				bench,
+				"Leg",
+				Vector3.new(0.5, 3, 0.5),
+				Vector3.new(benchX + dx, 1.5, cz + dz),
+				C.darkWood,
+				Enum.Material.Wood
+			)
+		end
+	end
+	box(bench, "LowerShelf", Vector3.new(3.6, 0.3, 11.4), Vector3.new(benchX, 0.8, cz), C.wood, Enum.Material.Wood)
+	box(
+		bench,
+		"Toolbox",
+		Vector3.new(1.6, 1, 2.6),
+		Vector3.new(benchX, 1.45, cz - 3),
+		C.redPaint,
+		Enum.Material.Metal,
+		DETAIL
+	)
+	box(
+		bench,
+		"Vise",
+		Vector3.new(1, 0.8, 0.8),
+		Vector3.new(benchX + 1.6, 3.9, cz + 5),
+		Color3.fromRGB(50, 70, 90),
+		Enum.Material.Metal,
+		DETAIL
+	)
+
+	-- pegboard with lanterns hanging on hooks
+	local board = box(
+		bench,
+		"Pegboard",
+		Vector3.new(0.2, 6, 12),
+		Vector3.new(wx + 0.2, 7.5, cz),
+		Color3.fromRGB(150, 116, 80),
+		Enum.Material.Wood
+	)
+	board.CastShadow = false
+	local count = #Lanterns.List
+	for i, def in Lanterns.List do
+		local z = cz - 4.8 + (i - 1) * (9.6 / math.max(count - 1, 1))
+		local hookY = 9.6
 		box(
-			board,
-			"Frame",
-			Vector3.new(0.7, 12, 0.6),
-			pos + Vector3.new(-0.1, 0, dz),
-			C.trim,
-			Enum.Material.Wood,
+			bench,
+			"Hook",
+			Vector3.new(0.9, 0.1, 0.1),
+			Vector3.new(wx + 0.75, hookY, z),
+			C.steel,
+			Enum.Material.Metal,
 			DETAIL
 		)
+		local lantern = LanternBuilder.buildModel(def.id, true)
+		-- ring centre sits on the hook; lantern hangs below, off the board
+		lantern:PivotTo(CFrame.new(wx + 1.1, hookY - 2.4, z) * CFrame.Angles(0, math.rad(90), 0))
+		local light = lantern:FindFirstChild("Light", true)
+		if light then
+			light.Brightness *= 0.3
+			light.Range = 7
+			light.Shadows = false
+		end
+		lantern.Parent = bench
 	end
-	for _, dy in { -5.8, 5.8 } do
-		box(
-			board,
-			"Frame",
-			Vector3.new(0.7, 0.6, 23.2),
-			pos + Vector3.new(-0.1, dy, 0),
-			C.trim,
-			Enum.Material.Wood,
-			DETAIL
-		)
-	end
-	local lamp = box(
-		board,
-		"PictureLight",
-		Vector3.new(0.6, 0.4, 14),
-		pos + Vector3.new(-1, 6.6, 0),
+	cagedLight(
+		bench,
+		CFrame.new(wx + 0.3, 11.5, cz) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(-30), 0, 0),
+		16,
+		1
+	)
+
+	local sign = box(
+		bench,
+		"Sign",
+		Vector3.new(0.1, 1.2, 6),
+		Vector3.new(wx + 0.35, 12.8, cz),
+		C.paint,
+		Enum.Material.Plaster,
+		DETAIL
+	)
+	surfaceText(sign, Enum.NormalId.Right, "LANTERNS", Enum.Font.SpecialElite, Color3.fromRGB(40, 30, 24))
+	prompt(top, "Workbench", "Customize Lantern", "Lanterns")
+end
+
+local function buildReadingNook(root: Instance)
+	local nook = folder(root, "Reading")
+	local cx, cz = -40, -34
+	box(
+		nook,
+		"Rug",
+		Vector3.new(12, 0.08, 10),
+		Vector3.new(cx, 0.04, cz),
+		Color3.fromRGB(92, 44, 32),
+		Enum.Material.Carpet,
+		{ CanCollide = false }
+	)
+	armchair(nook, CFrame.new(cx - 3, 0, cz + 2) * CFrame.Angles(0, math.rad(200), 0), Color3.fromRGB(96, 70, 46))
+	armchair(nook, CFrame.new(cx + 3, 0, cz + 2) * CFrame.Angles(0, math.rad(160), 0), Color3.fromRGB(70, 40, 36))
+	box(nook, "SideTable", Vector3.new(1.8, 2.2, 1.8), Vector3.new(cx, 1.1, cz + 3.5), C.darkWood, Enum.Material.Wood)
+	deskLamp(nook, Vector3.new(cx, 2.2, cz + 3.5), 12)
+	box(
+		nook,
+		"FloorLampPole",
+		Vector3.new(0.25, 6, 0.25),
+		Vector3.new(cx - 6, 3, cz - 3),
 		C.brass,
 		Enum.Material.Metal,
 		DETAIL
 	)
-	local spot = Instance.new("SpotLight")
-	spot.Face = Enum.NormalId.Bottom
-	spot.Angle = 100
-	spot.Range = 14
-	spot.Brightness = 1.4
-	spot.Color = C.warm
-	spot.Parent = lamp
+	local shade = box(
+		nook,
+		"FloorLampShade",
+		Vector3.new(1.6, 1.2, 1.6),
+		Vector3.new(cx - 6, 6.5, cz - 3),
+		Color3.fromRGB(230, 190, 140),
+		Enum.Material.Fabric,
+		DETAIL
+	)
+	pointLight(shade, 14, 0.9, true)
+	bookPile(nook, Vector3.new(cx + 5, 0, cz - 3), 6)
+	bookPile(nook, Vector3.new(cx + 6.2, 0, cz - 1.6), 4)
+
+	readingTable(nook, Vector3.new(-22, 0, -32), 0)
+	readingTable(nook, Vector3.new(22, 0, -32), 0)
+end
+
+local function buildFurnace(root: Instance)
+	local corner = folder(root, "Furnace")
+	local fx, fz = HALF_X - 5, -32
+	box(corner, "Body", Vector3.new(6, 7, 5), Vector3.new(fx, 3.5, fz), Color3.fromRGB(58, 56, 52), Enum.Material.Metal)
+	local grate = box(
+		corner,
+		"Grate",
+		Vector3.new(0.1, 1.6, 2.4),
+		Vector3.new(fx - 3.05, 2, fz),
+		Color3.fromRGB(255, 110, 40),
+		Enum.Material.Neon,
+		DETAIL
+	)
+	for i = -2, 2 do
+		box(
+			corner,
+			"GrateBar",
+			Vector3.new(0.12, 1.7, 0.12),
+			Vector3.new(fx - 3.1, 2, fz + i * 0.5),
+			Color3.fromRGB(30, 28, 26),
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+	local glow = pointLight(grate, 18, 1.4, true, Color3.fromRGB(255, 120, 50))
+	glow:SetAttribute("Flicker", "furnace")
+	box(
+		corner,
+		"Flue",
+		Vector3.new(CEILING - 7, 1.4, 1.4),
+		CFrame.new(fx, (CEILING + 7) / 2, fz) * CFrame.Angles(0, 0, math.rad(90)),
+		C.steel,
+		Enum.Material.Metal,
+		{
+			Shape = Enum.PartType.Cylinder,
+		}
+	)
+	box(
+		corner,
+		"WaterHeater",
+		Vector3.new(6, 3, 3),
+		CFrame.new(fx + 1, 3, fz - 7) * CFrame.Angles(0, 0, math.rad(90)),
+		Color3.fromRGB(190, 186, 176),
+		Enum.Material.Metal,
+		{
+			Shape = Enum.PartType.Cylinder,
+		}
+	)
+	box(
+		corner,
+		"FuseBox",
+		Vector3.new(0.4, 2.4, 1.8),
+		Vector3.new(HALF_X - 0.2, 6, fz + 7),
+		Color3.fromRGB(120, 120, 114),
+		Enum.Material.Metal,
+		DETAIL
+	)
+	box(
+		corner,
+		"Drain",
+		Vector3.new(1, 0.04, 1),
+		Vector3.new(fx - 6, 0.02, fz - 4),
+		Color3.fromRGB(30, 30, 30),
+		Enum.Material.DiamondPlate,
+		DETAIL
+	)
+end
+
+local function buildLeaderboard(root: Instance)
+	local board = folder(root, "Leaderboard")
+	local pos = Vector3.new(HALF_X - 0.25, 7.5, 40)
+	local face = box(board, "Board", Vector3.new(0.3, 7, 14), pos, C.chalkboard, Enum.Material.Slate)
+	for _, dz in { -7.2, 7.2 } do
+		box(
+			board,
+			"Frame",
+			Vector3.new(0.5, 7.6, 0.4),
+			pos + Vector3.new(-0.1, 0, dz),
+			C.wood,
+			Enum.Material.Wood,
+			DETAIL
+		)
+	end
+	for _, dy in { -3.7, 3.7 } do
+		box(
+			board,
+			"Frame",
+			Vector3.new(0.5, 0.4, 14.8),
+			pos + Vector3.new(-0.1, dy, 0),
+			C.wood,
+			Enum.Material.Wood,
+			DETAIL
+		)
+	end
+	box(
+		board,
+		"Ledge",
+		Vector3.new(0.8, 0.15, 14),
+		pos + Vector3.new(-0.5, -3.85, 0),
+		C.wood,
+		Enum.Material.Wood,
+		DETAIL
+	)
+	box(
+		board,
+		"Chalk",
+		Vector3.new(0.2, 0.15, 0.6),
+		pos + Vector3.new(-0.6, -3.7, 3),
+		Color3.fromRGB(235, 235, 225),
+		nil,
+		DETAIL
+	)
+	cagedLight(
+		board,
+		CFrame.new(HALF_X - 0.2, 12.2, 40) * CFrame.Angles(0, math.rad(-90), 0) * CFrame.Angles(math.rad(-35), 0, 0),
+		14,
+		1
+	)
+	for _, z in { 36, 44 } do
+		chair(board, Vector3.new(HALF_X - 9, 0, z), math.rad(-90))
+	end
 
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SurfaceGui"
 	gui.Face = Enum.NormalId.Left
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
-	gui.LightInfluence = 0.5
+	gui.PixelsPerStud = 50
+	gui.LightInfluence = 0.8
 	gui.Parent = face
+	local chalk = Color3.fromRGB(232, 232, 220)
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
 	title.Position = UDim2.fromScale(0, 0.03)
-	title.Size = UDim2.fromScale(1, 0.13)
-	title.Font = Enum.Font.Garamond
+	title.Size = UDim2.fromScale(1, 0.14)
+	title.Font = Enum.Font.IndieFlower
 	title.TextScaled = true
-	title.TextColor3 = C.trim
-	title.Text = "HALL OF RECORDS"
+	title.TextColor3 = chalk
+	title.Text = "hall of records"
 	title.Parent = gui
 
-	for col, spec in { { "Keys", "Most " .. Config.CurrencyName }, { "Trials", "Trials Survived" } } do
+	for col, spec in { { "Keys", "most " .. string.lower(Config.CurrencyName) }, { "Trials", "trials survived" } } do
 		local column = Instance.new("Frame")
 		column.Name = spec[1]
 		column.BackgroundTransparency = 1
-		column.Position = UDim2.fromScale((col - 1) * 0.5 + 0.03, 0.18)
-		column.Size = UDim2.fromScale(0.44, 0.8)
+		column.Position = UDim2.fromScale((col - 1) * 0.5 + 0.04, 0.19)
+		column.Size = UDim2.fromScale(0.42, 0.78)
 		column.Parent = gui
 		local heading = Instance.new("TextLabel")
 		heading.Name = "Heading"
 		heading.BackgroundTransparency = 1
-		heading.Size = UDim2.fromScale(1, 0.1)
-		heading.Font = Enum.Font.Garamond
+		heading.Size = UDim2.fromScale(1, 0.11)
+		heading.Font = Enum.Font.IndieFlower
 		heading.TextScaled = true
-		heading.TextColor3 = C.glow
+		heading.TextColor3 = Color3.fromRGB(240, 220, 150)
 		heading.Text = spec[2]
 		heading.Parent = column
 		for row = 1, 10 do
 			local label = Instance.new("TextLabel")
 			label.Name = "Row" .. row
 			label.BackgroundTransparency = 1
-			label.Position = UDim2.fromScale(0, 0.12 + (row - 1) * 0.088)
+			label.Position = UDim2.fromScale(0, 0.13 + (row - 1) * 0.087)
 			label.Size = UDim2.fromScale(1, 0.08)
-			label.Font = Enum.Font.Garamond
+			label.Font = Enum.Font.IndieFlower
 			label.TextScaled = true
 			label.TextXAlignment = Enum.TextXAlignment.Left
-			label.TextColor3 = Color3.fromRGB(225, 205, 170)
+			label.TextColor3 = chalk
 			label.Text = string.format("%d.  ---", row)
 			label.Parent = column
 		end
 	end
 end
 
-local function buildShop(root: Instance)
-	local shop = folder(root, "Shop")
-	local cx, cz = -30, 72
-	-- librarian's front desk facing the aisle (+X)
-	box(shop, "DeskBody", Vector3.new(3, 3.4, 14), Vector3.new(cx, 1.7, cz), C.darkWood, Enum.Material.Wood)
-	local top =
-		box(shop, "DeskTop", Vector3.new(3.8, 0.3, 14.8), Vector3.new(cx, 3.55, cz), C.marble, Enum.Material.Marble)
-	box(shop, "DeskWing", Vector3.new(8, 3.4, 3), Vector3.new(cx - 5.5, 1.7, cz - 5.5), C.darkWood, Enum.Material.Wood)
-	box(
-		shop,
-		"DeskWingTop",
-		Vector3.new(8.8, 0.3, 3.8),
-		Vector3.new(cx - 5.5, 3.55, cz - 5.5),
-		C.marble,
-		Enum.Material.Marble
-	)
-	for i = -2, 2 do
-		box(
-			shop,
-			"Drawer",
-			Vector3.new(0.15, 1.2, 2.2),
-			Vector3.new(cx + 1.55, 2.2, cz + i * 2.7),
-			C.wood,
-			Enum.Material.Wood,
-			DETAIL
-		)
-		box(
-			shop,
-			"Knob",
-			Vector3.new(0.2, 0.2, 0.5),
-			Vector3.new(cx + 1.65, 2.2, cz + i * 2.7),
-			C.brass,
-			Enum.Material.Metal,
-			DETAIL
-		)
-	end
-	-- old computer terminal (green glow, like the reference desk)
-	box(
-		shop,
-		"Monitor",
-		Vector3.new(1.4, 1.5, 1.8),
-		Vector3.new(cx - 0.4, 4.45, cz - 3),
-		Color3.fromRGB(50, 46, 40),
-		Enum.Material.SmoothPlastic,
-		DETAIL
-	)
-	local screen = box(
-		shop,
-		"Screen",
-		Vector3.new(0.05, 1.1, 1.4),
-		Vector3.new(cx + 0.33, 4.5, cz - 3),
-		C.screen,
-		Enum.Material.Neon,
-		DETAIL
-	)
-	pointLight(screen, 6, 0.8, false, C.screen)
-	bankerLamp(shop, Vector3.new(cx, 3.7, cz + 4))
-	for i = 0, 3 do
-		box(
-			shop,
-			"BookPile",
-			Vector3.new(1.4, 0.35, 1),
-			Vector3.new(cx - 0.3, 3.88 + i * 0.36, cz + 1 + (i % 2) * 0.15),
-			BOOK_COLORS[i + 1],
-			Enum.Material.Fabric,
-			DETAIL
-		)
-	end
-	shelfUnit(shop, CFrame.new(cx - 6, 0, cz + 2) * CFrame.Angles(0, math.rad(90), 0), 12, 10, 2.4, false)
-
-	local sign = box(
-		shop,
-		"Sign",
-		Vector3.new(0.3, 2.2, 8),
-		Vector3.new(cx + 0.5, 11, cz),
-		C.darkWood,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	box(
-		shop,
-		"SignChain",
-		Vector3.new(0.1, CEILING - 12, 0.1),
-		Vector3.new(cx + 0.5, (CEILING + 12) / 2, cz),
-		C.metal,
-		Enum.Material.Metal,
-		DETAIL
-	)
-	surfaceText(sign, Enum.NormalId.Right, "SHOP", nil, C.trim)
-	surfaceText(sign, Enum.NormalId.Left, "SHOP", nil, C.trim)
-	pendantLamp(shop, Vector3.new(cx + 2.5, 9, cz - 3), 18, 1.2)
-	prompt(top, "Librarian's Desk", "Browse Shop", "Shop")
-end
-
-local function buildLanternBench(root: Instance)
-	local bench = folder(root, "LanternBench")
-	local cx, cz = 30, 70
-	local top = box(bench, "Top", Vector3.new(3.6, 0.4, 12), Vector3.new(cx, 3, cz), C.midWood, Enum.Material.Wood)
-	for _, dz in { -5.4, 5.4 } do
-		for _, dx in { -1.4, 1.4 } do
-			box(
-				bench,
-				"Leg",
-				Vector3.new(0.4, 2.8, 0.4),
-				Vector3.new(cx + dx, 1.4, cz + dz),
-				C.darkWood,
-				Enum.Material.Wood
-			)
-		end
-	end
-	for i, def in Lanterns.List do
-		local z = cz - 5 + (i - 1) * (10 / math.max(#Lanterns.List - 1, 1))
-		local lantern = LanternBuilder.buildModel(def.id, true)
-		lantern:PivotTo(CFrame.new(cx, 3.2, z) * CFrame.Angles(0, math.rad(rng:NextInteger(-30, 30)), 0))
-		-- five lanterns side by side blow out the table; keep them as soft glows
-		local light = lantern:FindFirstChild("Light", true)
-		if light then
-			light.Brightness *= 0.3
-			light.Range = 8
-			light.Shadows = false
-		end
-		lantern.Parent = bench
-	end
-	local sign = box(
-		bench,
-		"Sign",
-		Vector3.new(0.3, 2.2, 9),
-		Vector3.new(cx - 0.5, 11, cz),
-		C.darkWood,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	box(
-		bench,
-		"SignChain",
-		Vector3.new(0.1, CEILING - 12, 0.1),
-		Vector3.new(cx - 0.5, (CEILING + 12) / 2, cz),
-		C.metal,
-		Enum.Material.Metal,
-		DETAIL
-	)
-	surfaceText(sign, Enum.NormalId.Left, "LANTERNS", nil, C.trim)
-	surfaceText(sign, Enum.NormalId.Right, "LANTERNS", nil, C.trim)
-	prompt(top, "Lantern Bench", "Customize Lantern", "Lanterns")
-end
-
-local function buildEntrance(root: Instance)
-	local entrance = folder(root, "Entrance")
-	local steps = 7
-	for k = 1, steps do
-		box(
-			entrance,
-			"Step",
-			Vector3.new(12, k, 1),
-			Vector3.new(0, k / 2, HALF_Z - steps - 0.5 + k),
-			C.midWood,
-			Enum.Material.WoodPlanks
-		)
-	end
-	box(
-		entrance,
-		"Landing",
-		Vector3.new(12, steps, 2),
-		Vector3.new(0, steps / 2, HALF_Z - 1),
-		C.midWood,
-		Enum.Material.WoodPlanks
-	)
-	box(
-		entrance,
-		"Door",
-		Vector3.new(6, 10, 0.4),
-		Vector3.new(0, steps + 5, HALF_Z - 0.2),
-		C.darkWood,
-		Enum.Material.Wood
-	)
-	box(
-		entrance,
-		"DoorFrame",
-		Vector3.new(7.6, 11, 0.3),
-		Vector3.new(0, steps + 5.3, HALF_Z - 0.05),
-		C.trim,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	local exitSign = box(
-		entrance,
-		"ExitSign",
-		Vector3.new(2.4, 0.8, 0.2),
-		Vector3.new(0, steps + 11.4, HALF_Z - 0.3),
-		Color3.fromRGB(20, 20, 20),
-		Enum.Material.SmoothPlastic,
-		DETAIL
-	)
-	surfaceText(exitSign, Enum.NormalId.Front, "NO EXIT", nil, Color3.fromRGB(200, 60, 50))
-	local bulb = box(
-		entrance,
-		"Bulb",
-		Vector3.new(0.5, 0.6, 0.5),
-		Vector3.new(0, steps + 12.6, HALF_Z - 1.2),
-		C.glow,
-		Enum.Material.Neon,
-		DETAIL
-	)
-	pointLight(bulb, 14, 0.8, true)
-
-	local spawnPoint = Instance.new("SpawnLocation")
-	spawnPoint.Name = "Spawn"
-	spawnPoint.Anchored = true
-	spawnPoint.Size = Vector3.new(10, 0.2, 6)
-	spawnPoint.CFrame = CFrame.new(0, 0.11, HALF_Z - 14) -- faces -Z, down the aisle
-	spawnPoint.Transparency = 1
-	spawnPoint.CanCollide = false
-	spawnPoint.CanQuery = false
-	spawnPoint.Neutral = true
-	spawnPoint.Duration = 0
-	spawnPoint.Parent = entrance
-end
-
 ------------------------------------------------------------------------------------------
--- Door wall: two wings of Solo / Duo / Squad queue pads
+-- Door wall: six mismatched doors that shouldn't be in a basement
 ------------------------------------------------------------------------------------------
-local function buildPad(parent: Instance, wing: string, mode: string, x: number)
+local DOOR_STYLES = {
+	{ color = Color3.fromRGB(64, 40, 28), material = Enum.Material.Wood, panels = true }, -- old panel door
+	{ color = Color3.fromRGB(110, 112, 110), material = Enum.Material.Metal, bar = true }, -- steel utility door
+	{ color = Color3.fromRGB(70, 96, 72), material = Enum.Material.WoodPlanks, panels = true }, -- faded green
+	{ color = Color3.fromRGB(70, 82, 104), material = Enum.Material.WoodPlanks, panels = true }, -- faded blue
+	{ color = Color3.fromRGB(120, 116, 104), material = Enum.Material.Metal, bar = true },
+	{ color = Color3.fromRGB(110, 40, 32), material = Enum.Material.Wood, panels = true }, -- red
+}
+
+local function buildPad(parent: Instance, queue: Instance, wing: string, mode: string, x: number, style)
 	local spec = Config.Modes[mode]
 	local pad = folder(parent, wing .. "_" .. mode)
 	pad:SetAttribute("Mode", mode)
@@ -1150,130 +1374,141 @@ local function buildPad(parent: Instance, wing: string, mode: string, x: number)
 	pad:SetAttribute("TimeLeft", 0)
 	local wallZ = -HALF_Z
 
-	-- doorway
+	-- door set into the block wall
 	for _, s in { -1, 1 } do
-		box(pad, "Jamb", Vector3.new(1.2, 12, 1.6), Vector3.new(x + s * 4, 6, wallZ + 0.8), C.wood, Enum.Material.Wood)
-	end
-	box(pad, "Header", Vector3.new(9.4, 1.6, 1.8), Vector3.new(x, 12.8, wallZ + 0.9), C.wood, Enum.Material.Wood)
-	box(
-		pad,
-		"Door",
-		Vector3.new(6.8, 11.4, 0.4),
-		Vector3.new(x, 5.7, wallZ + 0.3),
-		Color3.fromRGB(44, 27, 19),
-		Enum.Material.Wood
-	)
-	for _, dy in { 2.8, 8.2 } do
 		box(
 			pad,
-			"DoorPanel",
-			Vector3.new(4.8, 3.6, 0.15),
-			Vector3.new(x, dy, wallZ + 0.55),
-			Color3.fromRGB(56, 35, 24),
-			Enum.Material.Wood,
+			"Jamb",
+			Vector3.new(0.6, 9, 0.8),
+			Vector3.new(x + s * 2.9, 4.5, wallZ + 0.4),
+			C.wood,
+			Enum.Material.Wood
+		)
+	end
+	box(pad, "Header", Vector3.new(6.4, 0.6, 0.8), Vector3.new(x, 9.3, wallZ + 0.4), C.wood, Enum.Material.Wood)
+	box(pad, "Door", Vector3.new(5.2, 9, 0.3), Vector3.new(x, 4.5, wallZ + 0.15), style.color, style.material)
+	if style.panels then
+		for _, dy in { 2.4, 6.6 } do
+			box(
+				pad,
+				"DoorPanel",
+				Vector3.new(3.8, 3, 0.12),
+				Vector3.new(x, dy, wallZ + 0.36),
+				style.color:Lerp(Color3.new(0, 0, 0), 0.15),
+				style.material,
+				DETAIL
+			)
+		end
+		box(
+			pad,
+			"Knob",
+			Vector3.new(0.35, 0.35, 0.35),
+			Vector3.new(x + 2, 4.4, wallZ + 0.45),
+			C.brass,
+			Enum.Material.Metal,
+			{ Shape = Enum.PartType.Ball, CanCollide = false }
+		)
+	end
+	if style.bar then
+		box(
+			pad,
+			"PushBar",
+			Vector3.new(3.8, 0.3, 0.3),
+			Vector3.new(x, 4.2, wallZ + 0.45),
+			Color3.fromRGB(60, 60, 60),
+			Enum.Material.Metal,
+			DETAIL
+		)
+		box(
+			pad,
+			"WireWindow",
+			Vector3.new(1.2, 1.8, 0.1),
+			Vector3.new(x, 6.8, wallZ + 0.33),
+			Color3.fromRGB(30, 34, 38),
+			Enum.Material.Glass,
 			DETAIL
 		)
 	end
 	box(
 		pad,
-		"Knob",
-		Vector3.new(0.4, 0.4, 0.4),
-		Vector3.new(x + 2.5, 5.3, wallZ + 0.7),
+		"Threshold",
+		Vector3.new(6, 0.1, 1),
+		Vector3.new(x, 0.05, wallZ + 0.8),
 		C.brass,
 		Enum.Material.Metal,
-		{ Shape = Enum.PartType.Ball, CanCollide = false }
-	)
-	for _, s in { -1, 1 } do
-		local sconce = box(
-			pad,
-			"Sconce",
-			Vector3.new(0.5, 0.8, 0.5),
-			Vector3.new(x + s * 5.4, 9, wallZ + 0.5),
-			C.glow,
-			Enum.Material.Neon,
-			DETAIL
-		)
-		pointLight(sconce, 10, 0.9, false)
-	end
-
-	-- sign above the door, faces the room (+Z = Back face)
-	local sign = box(
-		pad,
-		"Sign",
-		Vector3.new(8, 2.6, 0.3),
-		Vector3.new(x, 15.4, wallZ + 0.3),
-		C.darkWood,
-		Enum.Material.Wood,
 		DETAIL
 	)
+	local light = cagedLight(queue, CFrame.new(x + 4, 8.6, wallZ + 0.15) * CFrame.Angles(math.rad(-20), 0, 0), 16, 1.1)
+	light.Name = "DoorLight"
+
+	-- stencilled straight onto the cinderblock above the door (faces +Z = Back face)
+	local sign =
+		box(pad, "Sign", Vector3.new(6, 2.2, 0.05), Vector3.new(x, 11.6, wallZ + 0.03), C.block, Enum.Material.Brick, {
+			Transparency = 1,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		})
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SurfaceGui"
 	gui.Face = Enum.NormalId.Back
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 50
-	gui.LightInfluence = 0.4
+	gui.LightInfluence = 1
 	gui.Parent = sign
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Name = "Title"
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Size = UDim2.fromScale(1, 0.55)
-	titleLabel.Font = Enum.Font.Garamond
+	titleLabel.Size = UDim2.fromScale(1, 0.58)
+	titleLabel.Font = Enum.Font.SpecialElite
 	titleLabel.TextScaled = true
-	titleLabel.TextColor3 = C.trim
+	titleLabel.TextColor3 = C.redPaint
 	titleLabel.Text = string.upper(mode)
 	titleLabel.Parent = gui
 	local status = Instance.new("TextLabel")
 	status.Name = "Status"
 	status.BackgroundTransparency = 1
-	status.Position = UDim2.fromScale(0, 0.55)
-	status.Size = UDim2.fromScale(1, 0.45)
-	status.Font = Enum.Font.Garamond
+	status.Position = UDim2.fromScale(0, 0.58)
+	status.Size = UDim2.fromScale(1, 0.42)
+	status.Font = Enum.Font.SpecialElite
 	status.TextScaled = true
-	status.TextColor3 = C.glow
+	status.TextColor3 = Color3.fromRGB(50, 44, 38)
 	status.Text = string.format("0 / %d", spec.capacity)
 	status.Parent = gui
 
-	-- rug pad players stand on, plus the invisible zone and exit point used by QueueService
-	local padZ = wallZ + 8
+	-- doormat players stand on, plus the invisible zone and exit point used by QueueService
+	local padZ = wallZ + 6
 	box(
 		pad,
 		"Rug",
-		Vector3.new(10, 0.15, 8),
-		Vector3.new(x, 0.08, padZ),
+		Vector3.new(7, 0.12, 5),
+		Vector3.new(x, 0.06, padZ),
 		spec.color,
-		Enum.Material.Fabric,
+		Enum.Material.Carpet,
 		{ CanCollide = false }
 	)
 	box(
 		pad,
 		"RugBorder",
-		Vector3.new(10.8, 0.12, 8.8),
-		Vector3.new(x, 0.06, padZ),
-		C.trim,
-		Enum.Material.Fabric,
+		Vector3.new(7.6, 0.1, 5.6),
+		Vector3.new(x, 0.05, padZ),
+		Color3.fromRGB(46, 36, 28),
+		Enum.Material.Carpet,
 		DETAIL
 	)
-	box(pad, "Zone", Vector3.new(10, 8, 8), Vector3.new(x, 4, padZ), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic, {
+	box(pad, "Zone", Vector3.new(7, 8, 6), Vector3.new(x, 4, padZ), Color3.new(1, 1, 1), nil, {
 		Transparency = 1,
 		CanCollide = false,
 		CanQuery = false,
 		CanTouch = false,
 		CastShadow = false,
 	})
-	box(
-		pad,
-		"Exit",
-		Vector3.new(1, 1, 1),
-		Vector3.new(x, 3, padZ + 10),
-		Color3.new(1, 1, 1),
-		Enum.Material.SmoothPlastic,
-		{
-			Transparency = 1,
-			CanCollide = false,
-			CanQuery = false,
-			CanTouch = false,
-		}
-	)
+	box(pad, "Exit", Vector3.new(1, 1, 1), Vector3.new(x, 3, padZ + 9), Color3.new(1, 1, 1), nil, {
+		Transparency = 1,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+	})
 	return pad
 end
 
@@ -1284,113 +1519,102 @@ local function buildDoorWall(root: Instance)
 	pads.Parent = root
 
 	-- mirrored wings: Solo on the outside, Squad nearest the clock
-	local wings = { A = { -50, -34, -18 }, B = { 50, 34, 18 } }
+	local wings = { A = { -40, -26, -12 }, B = { 40, 26, 12 } }
+	local styleIndex = { A = { 1, 2, 3 }, B = { 6, 5, 4 } }
 	for wing, xs in wings do
 		for i, mode in Config.ModeOrder do
-			buildPad(pads, wing, mode, xs[i])
-			pendantLamp(queue, Vector3.new(xs[i], 17, -HALF_Z + 9), 20, 1.3)
+			buildPad(pads, queue, wing, mode, xs[i], DOOR_STYLES[styleIndex[wing][i]])
 		end
 	end
-	for _, x in { -34, 34 } do
-		chandelier(queue, Vector3.new(x, 24, -HALF_Z + 20))
-	end
 
-	-- centerpiece between the wings: grandfather clock under the title board
 	local wallZ = -HALF_Z
-	box(queue, "ClockCase", Vector3.new(4, 11, 2.2), Vector3.new(0, 5.5, wallZ + 1.4), C.darkWood, Enum.Material.Wood)
+	-- wall clock that has stopped, over an old cast-iron radiator
 	box(
 		queue,
-		"ClockHood",
-		Vector3.new(4.8, 1, 2.6),
-		Vector3.new(0, 11.5, wallZ + 1.4),
-		C.trim,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	local clockFace = box(
-		queue,
 		"ClockFace",
-		Vector3.new(0.2, 3, 3),
-		CFrame.new(0, 8.6, wallZ + 2.55) * CFrame.Angles(0, math.rad(90), 0),
-		Color3.fromRGB(235, 220, 190),
+		Vector3.new(0.3, 3, 3),
+		CFrame.new(0, 8, wallZ + 0.2) * CFrame.Angles(0, math.rad(90), 0),
+		Color3.fromRGB(226, 216, 196),
 		Enum.Material.SmoothPlastic,
 		{
 			Shape = Enum.PartType.Cylinder,
 			CanCollide = false,
 		}
 	)
-	pointLight(clockFace, 6, 0.4, false)
+	box(
+		queue,
+		"ClockRim",
+		Vector3.new(0.25, 3.4, 3.4),
+		CFrame.new(0, 8, wallZ + 0.12) * CFrame.Angles(0, math.rad(90), 0),
+		C.darkWood,
+		Enum.Material.Wood,
+		{
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+		}
+	)
 	box(
 		queue,
 		"HandHour",
-		Vector3.new(0.12, 0.9, 0.05),
-		CFrame.new(0, 8.85, wallZ + 2.7) * CFrame.Angles(0, 0, math.rad(-20)),
-		C.metal,
-		Enum.Material.Metal,
+		Vector3.new(0.12, 0.8, 0.05),
+		CFrame.new(0.15, 8.3, wallZ + 0.4) * CFrame.Angles(0, 0, math.rad(-20)),
+		Color3.fromRGB(20, 20, 20),
+		nil,
 		DETAIL
 	)
 	box(
 		queue,
 		"HandMinute",
-		Vector3.new(0.08, 1.3, 0.05),
-		CFrame.new(0.3, 8.6, wallZ + 2.7) * CFrame.Angles(0, 0, math.rad(-110)),
-		C.metal,
-		Enum.Material.Metal,
+		Vector3.new(0.08, 1.2, 0.05),
+		CFrame.new(-0.3, 8.2, wallZ + 0.4) * CFrame.Angles(0, 0, math.rad(60)),
+		Color3.fromRGB(20, 20, 20),
+		nil,
 		DETAIL
 	)
-	box(
-		queue,
-		"Pendulum",
-		Vector3.new(0.12, 3, 0.1),
-		Vector3.new(0, 4.8, wallZ + 2.55),
-		C.brass,
-		Enum.Material.Metal,
-		DETAIL
-	)
-
-	local title = box(
-		queue,
-		"TitleBoard",
-		Vector3.new(18, 4.4, 0.4),
-		Vector3.new(0, 17, wallZ + 0.3),
-		C.darkWood,
-		Enum.Material.Wood,
-		DETAIL
-	)
-	surfaceText(title, Enum.NormalId.Back, "PICK A DOOR", nil, C.trim)
-	local titleLamp = box(
-		queue,
-		"TitleLamp",
-		Vector3.new(10, 0.3, 0.6),
-		Vector3.new(0, 19.6, wallZ + 1.2),
-		C.brass,
-		Enum.Material.Metal,
-		DETAIL
-	)
-	local spot = Instance.new("SpotLight")
-	spot.Face = Enum.NormalId.Bottom
-	spot.Angle = 110
-	spot.Range = 12
-	spot.Brightness = 1.2
-	spot.Color = C.warm
-	spot.Parent = titleLamp
-
-	for _, s in { -1, 1 } do
-		local wingSign = box(
+	for i = -4, 4 do
+		box(
 			queue,
-			"WingLabelBoard",
-			Vector3.new(14, 2, 0.3),
-			Vector3.new(s * 34, 20, wallZ + 0.3),
-			C.darkWood,
-			Enum.Material.Wood,
+			"RadiatorFin",
+			Vector3.new(0.4, 2.6, 0.9),
+			Vector3.new(i * 0.55, 1.6, wallZ + 0.9),
+			Color3.fromRGB(150, 140, 120),
+			Enum.Material.Metal,
 			DETAIL
 		)
-		surfaceText(wingSign, Enum.NormalId.Back, s < 0 and "WING A" or "WING B", nil, C.glow)
 	end
+	box(
+		queue,
+		"RadiatorPipe",
+		Vector3.new(5.2, 0.3, 0.3),
+		Vector3.new(0, 0.4, wallZ + 0.9),
+		C.pipe,
+		Enum.Material.Metal,
+		DETAIL
+	)
+
+	-- red stencil, painted a little crooked
+	local stencil = box(
+		queue,
+		"Stencil",
+		Vector3.new(16, 2.6, 0.05),
+		CFrame.new(0, 12.2, wallZ + 0.03) * CFrame.Angles(0, 0, math.rad(-1.5)),
+		C.block,
+		Enum.Material.Brick,
+		{
+			Transparency = 1,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		}
+	)
+	surfaceText(stencil, Enum.NormalId.Back, "PICK A DOOR", Enum.Font.SpecialElite, C.redPaint)
+	-- one bulb in front of the doors that won't stay on
+	local _, bulb = bareBulb(queue, Vector3.new(0, CEILING - 4.5, wallZ + 12), 22, 1.2, true)
+	bulb:FindFirstChildOfClass("PointLight"):SetAttribute("Flicker", "bulb")
 end
 
 ------------------------------------------------------------------------------------------
--- Lighting: dark, warm, hazy. Future tech so every lamp casts real light.
+-- Lighting: dark, warm, dusty
 ------------------------------------------------------------------------------------------
 local function setupLighting()
 	-- Technology is engine-protected from scripts; set Lighting.Technology = Future in Studio.
@@ -1399,12 +1623,12 @@ local function setupLighting()
 	end)
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
-	Lighting.Ambient = Color3.fromRGB(14, 9, 6)
-	Lighting.OutdoorAmbient = Color3.fromRGB(10, 8, 7)
+	Lighting.Ambient = Color3.fromRGB(16, 12, 9)
+	Lighting.OutdoorAmbient = Color3.fromRGB(10, 9, 8)
 	Lighting.EnvironmentDiffuseScale = 0.15
-	Lighting.EnvironmentSpecularScale = 0.35
+	Lighting.EnvironmentSpecularScale = 0.3
 	Lighting.GlobalShadows = true
-	Lighting.ExposureCompensation = 0.25
+	Lighting.ExposureCompensation = 0.3
 
 	for _, child in Lighting:GetChildren() do
 		if child:IsA("PostEffect") or child:IsA("Atmosphere") or child:IsA("Sky") then
@@ -1412,25 +1636,25 @@ local function setupLighting()
 		end
 	end
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.38
+	atmosphere.Density = 0.42
 	atmosphere.Offset = 0
-	atmosphere.Color = Color3.fromRGB(70, 48, 32)
-	atmosphere.Decay = Color3.fromRGB(30, 20, 14)
+	atmosphere.Color = Color3.fromRGB(66, 52, 40)
+	atmosphere.Decay = Color3.fromRGB(30, 24, 18)
 	atmosphere.Glare = 0
-	atmosphere.Haze = 1.6
+	atmosphere.Haze = 2
 	atmosphere.Parent = Lighting
 
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.TintColor = Color3.fromRGB(255, 236, 214)
-	cc.Contrast = 0.12
-	cc.Saturation = -0.05
+	cc.TintColor = Color3.fromRGB(255, 238, 220)
+	cc.Contrast = 0.1
+	cc.Saturation = -0.12
 	cc.Brightness = 0.02
 	cc.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.7
-	bloom.Size = 28
-	bloom.Threshold = 1.4
+	bloom.Intensity = 0.6
+	bloom.Size = 24
+	bloom.Threshold = 1.5
 	bloom.Parent = Lighting
 end
 
@@ -1449,14 +1673,13 @@ function LobbyBuilder.build()
 	local root = Instance.new("Model")
 	root.Name = "Lobby"
 	buildShell(root)
-	buildAisle(root)
+	buildStairs(root)
 	buildStacks(root)
-	buildReadingNooks(root)
-	buildMezzanine(root)
-	buildLeaderboard(root)
 	buildShop(root)
-	buildLanternBench(root)
-	buildEntrance(root)
+	buildWorkbench(root)
+	buildReadingNook(root)
+	buildFurnace(root)
+	buildLeaderboard(root)
 	buildDoorWall(root)
 	root.Parent = workspace
 
