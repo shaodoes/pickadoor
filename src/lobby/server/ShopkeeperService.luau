@@ -334,6 +334,12 @@ local function assemble(model: Model, world: CFrame)
 		if part ~= root then
 			part:SetAttribute("Rest", rootInverse * cf)
 		end
+		-- joint pivots must live in the same (hip-relative) frame as Rest, or the head and arms
+		-- swing around points offset by the hip height and come off the body when they turn
+		local pivot = part:GetAttribute("Pivot")
+		if pivot then
+			part:SetAttribute("Pivot", rootInverse * pivot)
+		end
 	end
 	model.PrimaryPart = root
 	nameTag(head)
