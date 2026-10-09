@@ -141,12 +141,15 @@ local function buildWalkIn(pad: PadState)
 		part.CanQuery = false
 		part.CanTouch = false
 		part.CastShadow = false
-		part.Transparency = 1
+		-- pitch black (Neon black never catches light), so the light pouring out of the cutscene
+		-- doorway can't reveal the plaster behind it: the passage reads as a void, not a cupboard
+		part.Color = Color3.new(0, 0, 0)
+		part.Material = Enum.Material.Neon
 		part.Size = size
 		part.CFrame = f * CFrame.new(offset)
 		part.Parent = folder
 	end
-	block("Floor", Vector3.new(5.4, 0.4, 4.4), Vector3.new(0, -0.2, -2.1))
+	block("Floor", Vector3.new(5.4, 0.4, 4.4), Vector3.new(0, -0.18, -2.1)) -- just proud of the plaster below
 	block("Back", Vector3.new(5.6, 10, 0.4), Vector3.new(0, 5, -4.15))
 	block("SideL", Vector3.new(0.4, 10, 4.4), Vector3.new(-2.9, 5, -2.1))
 	block("SideR", Vector3.new(0.4, 10, 4.4), Vector3.new(2.9, 5, -2.1))
