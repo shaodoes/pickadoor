@@ -45,7 +45,7 @@ RoomMoods.Base = {
 	bloom = { Intensity = 0.45, Size = 24, Threshold = 1.7 },
 	light = { Ambient = rgb(13, 13, 14), OutdoorAmbient = rgb(14, 17, 19), Exposure = 0 },
 	vignette = 0.25,
-	lantern = 0.5,
+	lantern = 0.35,
 }
 
 RoomMoods.Profiles = {

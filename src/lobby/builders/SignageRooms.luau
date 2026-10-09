@@ -216,15 +216,15 @@ function SignageRooms.theDoors(parent: Instance, centre: Vector3, n: Vector3): M
 				name = "Glow",
 				color = Color3.fromRGB(150, 14, 10),
 				material = NEON,
-				transparency = 0.45,
-				grow = 0.2,
+				transparency = 0.78, -- a thin rim, not a blob: the letters must stay readable
+				grow = 0.08,
 				z = 0.005,
 				d = 0.02,
 			},
 			{ name = "Body", color = Color3.fromRGB(88, 30, 24), material = METAL, z = 0.02, d = 0.2 },
 			{
 				name = "Face",
-				color = Color3.fromRGB(200, 34, 22),
+				color = Color3.fromRGB(165, 26, 18), -- Neon renders far brighter than its colour
 				material = NEON,
 				grow = -0.05,
 				z = 0.22,
