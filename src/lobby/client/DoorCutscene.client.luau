@@ -245,6 +245,7 @@ local function titleCard(parent: Instance, subtitle: string): Frame
 	sub.FontFace = LABEL_FONT
 	sub.TextScaled = true
 	sub.Text = subtitle
+	sub.Visible = subtitle ~= ""
 	sub.TextColor3 = CREAM
 	sub.TextTransparency = 1
 	sub.ZIndex = 23
@@ -413,8 +414,7 @@ local function begin(pad: Instance)
 			director:fade(1, 0.08)
 		end)
 		at("title", DoorEntry.TITLE, ct, function()
-			session.title =
-				titleCard(director.gui, if mode ~= "" then mode .. "   /   THE DOOR IS SHUT" else "THE DOOR IS SHUT")
+			session.title = titleCard(director.gui, "") -- no subtitle under PICK A DOOR
 			Sfx.play("TitleSpray", 0.05)
 			Sfx.play("CutsceneSting", 0)
 		end)
