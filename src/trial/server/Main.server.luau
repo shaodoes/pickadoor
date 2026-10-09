@@ -26,6 +26,7 @@ local trial = workspace:FindFirstChild("Trial") or require(ServerStorage.Builder
 DataService.start()
 Monetization.start()
 LanternService.start()
+require(Common.TitleService).start() -- titles, death count, nameplate attributes
 
 -- ItemService (items, laser, lockpicks) is written by the items specialist; the trial runs
 -- without it until it lands, so look for it instead of requiring it outright.

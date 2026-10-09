@@ -29,6 +29,8 @@ local DEFINITIONS = {
 	ClaimChallenge = "RemoteFunction", -- client -> server: (scope "daily"|"weekly", slot 1..3) -> { ok, message }
 	Talked = "RemoteEvent", -- client -> server: finished a conversation with "Teeth" | "Librarian" | "Archivist"
 	RewardsDebug = "RemoteEvent", -- client -> server, Studio only: "nextDay" | "skipDay" | "resetDay" | "resetAll"
+	-- [titles] nameplate titles (see Shared.Titles, Common.TitleService)
+	EquipTitle = "RemoteFunction", -- client -> server: title id -> { ok, message }
 }
 
 function Remotes.setup()

@@ -488,10 +488,87 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 			bar(f, color, 0.1 + i * 0.22, 0.36, 0.16, 0.28, 1)
 		end
 	end,
+	-- titles / nameplates ---------------------------------------------------------------------
+	skull = function(f, color, s)
+		local hollow = Color3.fromRGB(24, 15, 12) -- sockets and teeth gaps read dark on any badge
+		bar(f, color, 0.12, 0.02, 0.76, 0.66, 999) -- cranium
+		bar(f, color, 0.27, 0.5, 0.46, 0.4, math.floor(s * 0.08)) -- jaw
+		bar(f, hollow, 0.24, 0.32, 0.2, 0.2, 999, 2) -- eye sockets
+		bar(f, hollow, 0.56, 0.32, 0.2, 0.2, 999, 2)
+		bar(f, hollow, 0.46, 0.54, 0.08, 0.1, 1, 2) -- nose
+		bar(f, hollow, 0.405, 0.72, 0.05, 0.18, nil, 2) -- teeth gaps
+		bar(f, hollow, 0.545, 0.72, 0.05, 0.18, nil, 2)
+	end,
+	medal = function(f, color, s)
+		for _, spec in { { 0.36, 20 }, { 0.64, -20 } } do
+			part(f, {
+				BackgroundColor3 = color,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(spec[1], 0.2),
+				Size = UDim2.fromScale(0.2, 0.42),
+				Rotation = spec[2],
+			}, 1)
+		end
+		ring(f, 0.2, 0.36, 0.6, s, color, 2)
+		bar(f, color, 0.35, 0.51, 0.3, 0.3, 999, 2)
+	end,
+	door = function(f, color, s)
+		local frame = part(f, {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.2, 0.04),
+			Size = UDim2.fromScale(0.6, 0.92),
+		}, math.floor(s * 0.08))
+		UIKit.new("UIStroke", { Color = color, Thickness = math.max(1.5, s * 0.09), Parent = frame })
+		bar(f, color, 0.3, 0.14, 0.4, 0.3, 1) -- upper panel
+		bar(f, color, 0.58, 0.54, 0.12, 0.12, 999) -- knob
+	end,
+	moon = function(f, color)
+		-- a disc cut by a hard gradient edge: a fat crescent, with a small star beside it
+		local disc = bar(f, color, 0.04, 0.1, 0.78, 0.78, 999)
+		UIKit.new("UIGradient", {
+			Rotation = 35,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.55, 0),
+				NumberSequenceKeypoint.new(0.56, 1),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Parent = disc,
+		})
+		part(f, {
+			BackgroundColor3 = color,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.8, 0.26),
+			Size = UDim2.fromScale(0.16, 0.16),
+			Rotation = 45,
+		}, 1)
+	end,
+	eye = function(f, color, s)
+		local lid = part(f, {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.04, 0.24),
+			Size = UDim2.fromScale(0.92, 0.52),
+		}, 999)
+		UIKit.new("UIStroke", { Color = color, Thickness = math.max(1.5, s * 0.09), Parent = lid })
+		bar(f, color, 0.34, 0.34, 0.32, 0.32, 999) -- pupil
+	end,
+	wheel = function(f, color, s)
+		ring(f, 0.06, 0.06, 0.88, s, color)
+		for _, r in { 0, 60, 120 } do
+			part(f, {
+				BackgroundColor3 = color,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.8, 0.08),
+				Rotation = r,
+			}, 1)
+		end
+		bar(f, color, 0.38, 0.38, 0.24, 0.24, 999, 2) -- hub
+	end,
 }
 
 -- A square icon of `size` px. Names: play, close, key, cart, lantern, help, invite, heart, check, lock,
--- pills, bandage, lockpick, laser, battery.
+-- pills, bandage, lockpick, laser, battery, skull, medal, door, moon, eye, wheel.
 function UIKit.icon(name: string, color: Color3?, size: number?): Frame
 	local s = size or 24
 	local f = UIKit.new("Frame", {

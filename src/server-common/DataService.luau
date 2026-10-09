@@ -12,10 +12,12 @@ local Items = require(Shared.Items)
 local Lanterns = require(Shared.Lanterns)
 local Remotes = require(Shared.Remotes)
 local Rewards = require(Shared.Rewards)
+local Titles = require(Shared.Titles)
 
 local DataService = {}
 
-type Profile = { data: { [string]: any }, canSave: boolean, released: boolean }
+-- lastKeys: the Keys balance at the previous push, so increases can be added to Stats.keysEarned
+type Profile = { data: { [string]: any }, canSave: boolean, released: boolean, lastKeys: number }
 local profiles: { [Player]: Profile } = {}
 
 local changedEvent = Instance.new("BindableEvent")
@@ -45,6 +47,12 @@ local function defaults()
 		Daily = { streak = 0, lastClaimDay = -1 },
 		Spins = { lastFreeDay = -1, extra = 0, total = 0 },
 		Challenges = { day = -1, week = -1, daily = {}, weekly = {} },
+		-- titles + nameplate (see Shared.Titles): lifetime stat counters (challenge stat names plus
+		-- huntStreak / bestHuntStreak / keysEarned), character deaths, earned titles, the one shown
+		Stats = {},
+		Deaths = 0,
+		Titles = { [Titles.DefaultId] = true },
+		EquippedTitle = Titles.DefaultId,
 	}
 end
 
@@ -110,6 +118,35 @@ local function reconcile(data)
 		daily = slots(ch.daily),
 		weekly = slots(ch.weekly),
 	}
+	-- lifetime stats: any string key with a whole, non-negative count
+	local stats = {}
+	if type(data.Stats) == "table" then
+		for key, value in data.Stats do
+			local n = tonumber(value)
+			if type(key) == "string" and n and n == n then
+				stats[key] = math.max(0, math.floor(n))
+			end
+		end
+	end
+	-- saves from before lifetime stats existed: seed the trial count from TrialsPlayed
+	if stats.trials == nil then
+		stats.trials = math.max(0, math.floor(tonumber(data.TrialsPlayed) or 0))
+	end
+	data.Stats = stats
+	local deaths = tonumber(data.Deaths)
+	data.Deaths = if deaths and deaths == deaths then math.max(0, math.floor(deaths)) else 0
+	local titles = { [Titles.DefaultId] = true }
+	if type(data.Titles) == "table" then
+		for id, owned in data.Titles do
+			if owned == true and Titles.get(id) then
+				titles[id] = true
+			end
+		end
+	end
+	data.Titles = titles
+	if not titles[data.EquippedTitle] then
+		data.EquippedTitle = Titles.DefaultId
+	end
 	return data
 end
 
@@ -162,6 +199,10 @@ function DataService.snapshot(player: Player)
 			daily = cloneSlots(d.Challenges.daily),
 			weekly = cloneSlots(d.Challenges.weekly),
 		},
+		Stats = table.clone(d.Stats),
+		Deaths = d.Deaths,
+		Titles = table.clone(d.Titles),
+		EquippedTitle = d.EquippedTitle,
 	}
 end
 
@@ -172,6 +213,12 @@ local function replicate(player: Player)
 	end
 	-- challenges re-draw when the UTC day / week turns over (every push keeps them current)
 	Rewards.rollover(profile.data, player.UserId)
+	-- lifetime Keys earned (the "Hoarder" title): count every rise in the balance since the last push
+	local gained = profile.data.Keys - profile.lastKeys
+	if gained > 0 then
+		profile.data.Stats.keysEarned = (profile.data.Stats.keysEarned or 0) + gained
+	end
+	profile.lastKeys = profile.data.Keys
 	local stats = player:FindFirstChild("leaderstats")
 	if stats then
 		stats[Config.CurrencyName].Value = profile.data.Keys
@@ -215,7 +262,8 @@ local function load(player: Player)
 	trials.Parent = stats
 	stats.Parent = player
 
-	profiles[player] = { data = reconcile(data), canSave = canSave, released = false }
+	data = reconcile(data)
+	profiles[player] = { data = data, canSave = canSave, released = false, lastKeys = data.Keys }
 	replicate(player)
 end
 

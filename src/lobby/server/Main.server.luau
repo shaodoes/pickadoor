@@ -19,6 +19,7 @@ end
 DataService.start()
 Monetization.start()
 LanternService.start()
+require(Common.TitleService).start() -- titles, death count, nameplate attributes
 require(Common.ItemService).start({ recharge = true }) -- items + laser battery recharge (lobby only)
 require(script.Parent.ShopService).start()
 require(script.Parent.QueueService).start(lobby)

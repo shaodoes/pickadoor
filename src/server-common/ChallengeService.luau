@@ -4,7 +4,9 @@
 	ChallengeService.record(player, stat, amount?)
 		Count `amount` (default 1) towards every unclaimed daily/weekly challenge on `stat` (stat names
 		are listed in Shared.Rewards). Toasts when one completes. Safe to call from anywhere on the
-		server; does nothing for players without a loaded profile.
+		server; does nothing for players without a loaded profile. Also adds to the lifetime
+		profile.Stats[stat] counter that Shared.Titles unlocks read (huntSurvived also extends the
+		huntStreak / bestHuntStreak run; TitleService resets huntStreak when the character dies).
 
 	ChallengeService.claim(player, scope, slot) -> { ok, message }
 		Pays out a completed challenge (Keys, and extra Wheel of Fate spins for some weeklies).
@@ -36,6 +38,13 @@ function ChallengeService.record(player: Player, stat: string, amount: number?)
 	local finished = {}
 	local touched = false
 	DataService.update(player, function(data)
+		-- lifetime counters (titles), kept whether or not a challenge is drawn on this stat
+		local stats = data.Stats
+		stats[stat] = (stats[stat] or 0) + add
+		if stat == "huntSurvived" then
+			stats.huntStreak = (stats.huntStreak or 0) + add
+			stats.bestHuntStreak = math.max(stats.bestHuntStreak or 0, stats.huntStreak)
+		end
 		Rewards.rollover(data, player.UserId)
 		for _, set in { data.Challenges.daily, data.Challenges.weekly } do
 			for _, slot in set do

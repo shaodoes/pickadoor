@@ -1,10 +1,10 @@
 -- Lobby HUD: player card with the Keys counter, the bottom menu (PICK A DOOR + Shop / Lantern /
--- How to Play / Invite / Revive), shop + lantern panels, queue status bar, and toasts.
+-- Titles / How to Play / Invite / Revive), shop + lantern + titles panels, queue status bar, and toasts.
 -- Buttons and panels animate and click via UIKit; everything scales to the screen via UIKit.fit.
 --
 -- Instance names other scripts/tests rely on (keep them): ScreenGui "LobbyUI" with direct children
 -- "Keys" (TextLabel, Text = "<n> Keys"), "Menu" > "PickADoor" (TextButton), "QueueBar" (its first
--- TextLabel child is the status line), "ShopPanel", "LanternsPanel"; BindableEvent "OpenGuide".
+-- TextLabel child is the status line), "ShopPanel", "LanternsPanel", "TitlesPanel"; BindableEvent "OpenGuide".
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -20,6 +20,7 @@ local Items = require(Shared.Items)
 local Lanterns = require(Shared.Lanterns)
 local LanternBuilder = require(Shared.LanternBuilder)
 local Remotes = require(Shared.Remotes)
+local Titles = require(Shared.Titles)
 local UIKit = require(Shared.UIKit)
 
 local player = Players.LocalPlayer
@@ -249,9 +250,10 @@ local function menuButton(caption: string, order: number, icon: string, showText
 end
 local shopButton = menuButton("SHOP", 1, "cart", true)
 local lanternButton = menuButton("LANTERN", 2, "lantern", false)
-local helpButton = menuButton("HOW TO PLAY", 3, "help", false)
-local inviteButton = menuButton("INVITE", 4, "invite", false)
-local reviveButton = menuButton("REVIVE PASS", 5, "heart", false)
+local titlesButton = menuButton("TITLES", 3, "medal", false)
+local helpButton = menuButton("HOW TO PLAY", 4, "help", false)
+local inviteButton = menuButton("INVITE", 5, "invite", false)
+local reviveButton = menuButton("REVIVE PASS", 6, "heart", false)
 
 -- while you're queued the big button becomes LEAVE QUEUE
 local function refreshPlayButton()
@@ -274,7 +276,8 @@ end)
 ------------------------------------------------------------------------------------------
 local shopPanel, shopContent = UIKit.panel(gui, "Shop", UDim2.fromOffset(640, 480))
 local lanternPanel, lanternContent = UIKit.panel(gui, "Lanterns", UDim2.fromOffset(720, 480))
-local panels = { shopPanel, lanternPanel }
+local titlesPanel, titlesContent = UIKit.panel(gui, "Titles", UDim2.fromOffset(640, 480))
+local panels = { shopPanel, lanternPanel, titlesPanel }
 
 local function open(panel: Frame)
 	if UIKit.isOpen(panel) then
@@ -790,6 +793,79 @@ local function buildLanterns()
 	end
 end
 
+-- Titles ---------------------------------------------------------------------------------
+-- Every title in Shared.Titles: earned ones equip (the line under your name on your nameplate),
+-- locked ones are greyed with their hint and progress.
+local titlesList = UIKit.scrollList(titlesContent)
+
+local function buildTitles()
+	for _, child in titlesList:GetChildren() do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	local earnedCount = 0
+	for _, def in Titles.List do
+		if data and data.Titles and data.Titles[def.id] then
+			earnedCount += 1
+		end
+	end
+	sectionHeader(titlesList, 0, string.format("SHOWN ABOVE YOUR HEAD  ·  %d / %d EARNED", earnedCount, #Titles.List))
+	for i, def in Titles.List do
+		local earned = data ~= nil and data.Titles ~= nil and data.Titles[def.id] == true
+		local equipped = data ~= nil and data.EquippedTitle == def.id
+		local rarityColor = Titles.color(def)
+		local item = row(titlesList, i, 70, equipped and Colors.green or nil)
+		-- round badge in the rarity colour (grey while locked), like the one on the nameplate
+		local badge =
+			chip(def.icon, earned and Colors.paperLight or Colors.muted, earned and rarityColor or Colors.paperDark)
+		badge:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 24)
+		UIKit.stroke(earned and Colors.gold or Colors.inkMuted, 2, earned and 0.1 or 0.6).Parent = badge
+		badge.Parent = item
+		local title = rowTitle(item, def.text, 150, 8)
+		if not earned then
+			title.TextColor3 = Colors.inkMuted
+		end
+		local sub = rowBlurb(item, "", 150)
+		sub.RichText = true
+		sub.TextSize = 14
+		sub.Position = UDim2.fromOffset(74, 38)
+		local rarityText = string.format(
+			'<font color="#%s"><b>%s</b></font>',
+			rarityColor:Lerp(Colors.ink, 0.2):ToHex(),
+			string.upper(def.rarity)
+		)
+		if earned then
+			sub.Text = string.format("%s  ·  %s", rarityText, def.hint)
+		else
+			local current, target = Titles.progress(def, data)
+			sub.Text = string.format("%s  ·  %s (%d / %d)", rarityText, def.hint, current, target)
+		end
+		local action = UIKit.button(equipped and "EQUIPPED" or earned and "EQUIP" or "LOCKED", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -12, 0.5, 0),
+			Size = UDim2.fromOffset(128, 40),
+			TextSize = 18,
+			ZIndex = 2,
+			Parent = item,
+		}, {
+			style = equipped and "green" or earned and "ink" or "muted",
+			icon = equipped and "check" or not earned and "lock" or nil,
+			iconSize = 16,
+		})
+		action.Activated:Connect(function()
+			if equipped then
+				return
+			elseif not earned then
+				toast(string.format("%s is locked. %s", def.text, def.hint), "error")
+				return
+			end
+			local res = Remotes.get("EquipTitle"):InvokeServer(def.id)
+			toast(res.message, not res.ok and "error" or nil)
+		end)
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Queue status bar (slides up above the menu while you're on a mat)
 ------------------------------------------------------------------------------------------
@@ -901,6 +977,7 @@ local function refresh()
 	end
 	buildShop()
 	buildLanterns()
+	buildTitles()
 end
 
 helpButton.Activated:Connect(function()
@@ -914,6 +991,9 @@ shopButton.Activated:Connect(function()
 end)
 lanternButton.Activated:Connect(function()
 	open(lanternPanel)
+end)
+titlesButton.Activated:Connect(function()
+	open(titlesPanel)
 end)
 reviveButton.Activated:Connect(promptRevivePass)
 inviteButton.Activated:Connect(function()
