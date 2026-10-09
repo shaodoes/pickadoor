@@ -6,3 +6,6 @@ roblox.yml
 # Built place files (regenerate with rojo build)
 *.rbxl
 *.rbxlx
+
+# regenerable render of the lobby theme (python tools/make_music.py)
+assets/audio/lobby_theme.wav
