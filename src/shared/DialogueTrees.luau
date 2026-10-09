@@ -79,7 +79,7 @@ DialogueTrees.Shopkeeper = {
 			text = "Ask. I don't mind questions. I mind fingerprints.",
 			choices = {
 				{ text = "What do you sell?", next = "wares" },
-				{ text = "What are you?", next = "what" },
+				{ text = "Tell me about yourself", next = "about" },
 				{ text = "What's behind the doors?", next = "doors" },
 				{ text = "Nothing, sorry", next = "nothing" },
 			},
@@ -105,10 +105,58 @@ DialogueTrees.Shopkeeper = {
 			},
 		},
 
+		-- "Tell me about yourself": a submenu, so the main menu keeps its four slots
+		about = {
+			text = "Me? Nobody asks about me. They ask about prices. Go on, then. Quickly, before I get shy.",
+			choices = {
+				{ text = "What are you?", next = "what" },
+				{ text = "Why are you helping us?", next = "why" },
+				{ text = "Are the others like you?", next = "others" },
+				{ text = "Back", next = "menu" },
+			},
+		},
+
 		-- "What are you?"
 		what = { text = "The shopkeeper.", next = "before" },
 		before = { text = "Before that? The shop was empty. Then it wasn't.", next = "rude" },
-		rude = { text = "Don't look at the teeth. Everyone looks at the teeth. It's rude.", next = "menu" },
+		rude = { text = "Don't look at the teeth. Everyone looks at the teeth. It's rude.", next = "about" },
+
+		-- "Why are you helping us?": why a thing like him is on your side
+		why = {
+			text = "I used to be behind one of the doors. The wrong one. I was very good at it.",
+			next = "why2",
+		},
+		why2 = {
+			text = "But hunting is lonely. You chase someone for hours and then... they're gone. Every time. No conversation.",
+			next = "why3",
+		},
+		why3 = {
+			text = "Customers come back. Prey doesn't. I did the arithmetic. I'm very good at arithmetic.",
+			next = "why4",
+		},
+		why4 = {
+			text = "So I made a deal with the library. I keep the shop. It keeps my old door shut behind me.",
+			next = "why5",
+		},
+		why5 = {
+			text = function(ctx)
+				if played(ctx) then
+					return "And you came back. You see? It works. I'm so glad. I would hate to have to go back to the old job."
+				end
+				return "Buy a laser. Buy bandages. Come back alive. I'd hate for you to become a story I tell."
+			end,
+			next = "about",
+		},
+
+		-- "Are the others like you?"
+		others = {
+			text = "The others? No. They don't count, they don't trade, and they don't stop.",
+			next = "others2",
+		},
+		others2 = {
+			text = "The laser makes them blink. Blinking is all you need. Trust a thing that never does.",
+			next = "about",
+		},
 
 		-- "What's behind the doors?"
 		doors = {

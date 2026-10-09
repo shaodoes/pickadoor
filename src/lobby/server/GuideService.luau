@@ -20,7 +20,7 @@ local IDLE_ANIMATION = "rbxassetid://507766666" -- default R15 idle
 local SKIN = Color3.fromRGB(196, 186, 172)
 local COAT = Color3.fromRGB(56, 46, 38)
 local SCARF = Color3.fromRGB(96, 32, 28)
-local HAIR = Color3.fromRGB(150, 146, 140)
+local HAIR = Color3.fromRGB(214, 214, 220) -- old-man white-grey, cool so it reads against warm skin
 
 -- Attach a clothing part to a body part; the rig animates, so everything welds rather than anchors.
 local function wear(
@@ -132,25 +132,48 @@ local function dress(rig: Model)
 		Enum.Material.SmoothPlastic
 	)
 
-	-- thin grey hair and round brass spectacles (the dynamic head supplies the face)
-	wear(
-		rig,
-		"Head",
-		"Hair",
-		Vector3.new(head.X * 1.04, 0.28, head.Z * 1.04),
-		CFrame.new(0, head.Y / 2 - 0.05, 0.03),
-		HAIR,
-		Enum.Material.Fabric
-	)
-	wear(
-		rig,
-		"Head",
-		"HairBack",
-		Vector3.new(head.X * 1.04, head.Y * 0.6, 0.2),
-		CFrame.new(0, 0.1, head.Z / 2 + 0.02),
-		HAIR,
-		Enum.Material.Fabric
-	)
+	-- thin grey hair: a balding librarian's fringe round the sides and back, wild tufts over the
+	-- ears and a few combed-over strands on top. Rounded (sphere-mesh) tufts sit partly inside the
+	-- round head so nothing reads as a box; head front is -Z.
+	local hx, hy, hz = head.X / 2, head.Y / 2, head.Z / 2
+	local function tuft(name: string, size: Vector3, offset: Vector3, tilt: CFrame?)
+		local part = wear(
+			rig,
+			"Head",
+			name,
+			size,
+			CFrame.new(offset) * (tilt or CFrame.new()),
+			HAIR,
+			Enum.Material.SmoothPlastic
+		)
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = part
+		part.CastShadow = false
+		return part
+	end
+	tuft("HairBack", Vector3.new(hx * 2.1, hy * 1.05, hz * 0.75), Vector3.new(0, -0.06, hz * 0.85))
+	for _, s in { -1, 1 } do
+		-- fringe hugging each side, from the temple round to the back, standing proud of the skull
+		tuft("HairSide", Vector3.new(hx * 0.55, hy * 0.85, hz * 1.55), Vector3.new(s * hx * 1.0, -0.02, hz * 0.28))
+		-- the unruly tuft over each ear, sticking out
+		tuft(
+			"HairTuft",
+			Vector3.new(hx * 0.62, hy * 0.48, hz * 0.75),
+			Vector3.new(s * hx * 1.1, hy * 0.42, hz * 0.05),
+			CFrame.Angles(0, 0, s * math.rad(-30))
+		)
+	end
+	-- a sparse comb-over: three thin strands lying across the crown
+	for i, x in { -0.2, 0, 0.2 } do
+		tuft(
+			"HairStrand",
+			Vector3.new(hx * 0.36, 0.1, hz * 1.65),
+			Vector3.new(x * hx * 2, hy * 1.02, hz * 0.12),
+			CFrame.Angles(math.rad(-6), math.rad((i - 2) * 6), 0)
+		)
+	end
+
 	local front = -(head.Z / 2)
 	for _, x in { -0.2, 0.2 } do
 		wear(
