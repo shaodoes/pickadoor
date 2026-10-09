@@ -9,7 +9,7 @@
 
 	Floor plan (see Layout.luau for coordinates; +Z is the front, -Z the doors):
 		Foyer (y +6)     arrival: old wooden stairs down from the house, spawn, leaderboard, notices
-		Shop (y +6)      the gift shop, through a lit storefront on the foyer's left wall
+		Shop (y +6)      the store, through a lit storefront on the foyer's left wall
 		Grand stair      a wide concrete flight down from the foyer into the reading hall
 		Hall (y 0)       reading hall: study desks, bookcases, armchairs at the natatorium windows
 		Workshop (y -5)  boiler room + lantern workbench, down a timber stair through the hall's right wall

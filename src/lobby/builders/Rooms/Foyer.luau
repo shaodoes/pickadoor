@@ -2,7 +2,7 @@
 	The arrival foyer (floor y = 6): you come down the old wooden stairs from the house, land by the
 	spawn, and look straight across the foyer and down the wide concrete stair into the reading hall.
 	Also here: the chalkboard leaderboard, the patch-notes board, the Librarian's spot (GuideService),
-	and the gift shop's storefront on the left wall (built by Rooms/Shop).
+	and the store's storefront on the left wall (built by Rooms/Shop).
 ]]
 local Builders = script.Parent.Parent
 local Kit = require(Builders.Kit)
@@ -409,7 +409,7 @@ local function noticeBoard(model: Instance)
 	text.TextYAlignment = Enum.TextYAlignment.Top
 	text.TextColor3 = Clutter.INK
 	text.Text =
-		"10/08 - THE LIBRARY OPENS\n\n- Pick a door. Any door.\n- Lanterns are fixed up in the workshop, past the reading room.\n- The gift shop is open.\n- Something has been moving the papers at night."
+		"10/08 - THE LIBRARY OPENS\n\n- Pick a door. Any door.\n- Lanterns are fixed up in the workshop, past the reading room.\n- The store is open.\n- Something has been moving the papers at night."
 	text.Parent = gui
 	for _, offset in { Vector3.new(-2.5, 1.5, -0.15), Vector3.new(0.7, 1.55, -0.15), Vector3.new(2, 0.4, -0.15) } do
 		box(

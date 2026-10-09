@@ -1,14 +1,14 @@
 --[[
-	The Gift Shop: Teeth's room. The one room in the lobby that goes dark: black and deep purple where
+	The Store: Teeth's room. The one room in the lobby that goes dark: black and deep purple where
 	everything else is warm. The shopkeeper himself (a tall black-purple grinning thing) is built at runtime
 	by ShopkeeperService at Layout.Shopkeeper, behind the counter; the floor there (x -25..-22, z 50..56)
 	is kept clear of props.
 
 	Two halves:
 	  * Storefront, on the foyer side of the shared wall (the x = Openings.ShopDoor.x1 face, facing +X):
-	    the steel portal round the opening, planters and the chalk A-board stay; the marquee box sign has
-	    gone black enamel with violet trim, cold violet-white lettering, a violet neon tube and a ring of
-	    pale bulbs with a few of them dead.
+	    the steel portal round the opening, planters and the chalk A-board, and over the doorway the big
+	    "STORE" sign: a bevelled black panel with extruded neon-faced block letters rimmed in violet,
+	    recessed LED strips and chevrons (buildStoreSign; animated by client/StoreSignFX).
 	  * Interior (Layout.Rooms.Shop): purple damask wallpaper (a tinted Texture on thin panels over the
 	    shell walls), ebony wainscot, black marble floor and ceiling, a dark-wood checkout counter with a
 	    magenta underglow (the "Shop" ProximityPrompt), and behind it the lantern wall: every lantern in
@@ -65,7 +65,6 @@ local VIOLET = Color3.fromRGB(150, 90, 255) -- glow behind lettering, neon tubes
 local COLD = Color3.fromRGB(200, 170, 255) -- cold violet-white light
 local COLD_NEON = Color3.fromRGB(150, 110, 255) -- neon parts (Neon renders much paler than its colour)
 local MAGENTA = Color3.fromRGB(200, 70, 255) -- counter underglow
-local SIGN_TEXT = Color3.fromRGB(230, 220, 255)
 local BONE = Color3.fromRGB(196, 186, 206) -- keys, pages, quills: grey-lilac instead of cream
 local TILE_A = Color3.fromRGB(22, 16, 26)
 local TILE_B = Color3.fromRGB(30, 22, 34)
@@ -238,11 +237,403 @@ local function restain(model: Model?, tint: Color3?, material: Enum.Material?): 
 end
 
 ------------------------------------------------------------------------------------------
+-- The STORE sign over the storefront
+------------------------------------------------------------------------------------------
+--[[
+	A modern channel-letter sign: a bevelled black panel (brushed-metal body, glossy black face,
+	polished violet-steel chamfers) on stand-offs over the doorway, with "STORE" in extruded block
+	letters. Each letter is a gunmetal body with a neon face cap and a deep-violet neon backing a
+	little larger than the letter, so a glowing rim shows round every edge. Recessed LED strips run
+	above and below the letters (segmented, so the client can chase light along them), three neon
+	chevrons on each side point in at the name, and two pale eyes hide in the counter of the O. A
+	slim plate hangs underneath with the subline.
+
+	Size: 19 x 3.7 studs (the old marquee was 13.6 x 2.5), letters 2.4 tall and 0.42 deep, the whole
+	sign standing ~1.9 studs off the wall. It hangs over the top of the doorway (bottom of the plate
+	at ~14.05, door head at 16) because the foyer's downstand beam crosses just above the opening at
+	y 18.6: the top of the panel stops at 18.4, under the beam and clear of the cornice.
+
+	Everything is a detail part (no collisions, queries or shadows). The animation (light sweep,
+	letter flicker, LED chase, chevron chase, pulse, haze, the eyes) is client-side, in
+	client/StoreSignFX, which finds this model by name ("StoreSign") and reads the part names and
+	attributes set here. The model streams atomically so the client always sees it whole.
+]]
+local SIGN_W, SIGN_H, SIGN_D = 19, 3.7, 0.5 -- panel
+local SIGN_BEVEL = 0.22
+local LETTER_H, LETTER_W, LETTER_GAP = 2.4, 2.1, 0.62
+local STROKE, LETTER_D = 0.42, 0.42
+local SIGN_METAL = Color3.fromRGB(30, 26, 36) -- brushed body
+local SIGN_GLOSS = Color3.fromRGB(9, 7, 13) -- glossy black face
+local SIGN_BEVEL_COLOR = Color3.fromRGB(78, 62, 108) -- polished violet steel catching the light
+local LETTER_BODY = Color3.fromRGB(44, 38, 54) -- gunmetal returns
+local LETTER_FACE = Color3.fromRGB(186, 156, 255) -- neon face (renders near-white lilac)
+local LETTER_GLOW = Color3.fromRGB(120, 50, 235) -- the rim light round each letter
+local LED = Color3.fromRGB(150, 90, 255)
+local CHEVRON = Color3.fromRGB(190, 80, 255)
+
+-- Block letters on a LETTER_W x LETTER_H cell centred on 0, u to the viewer's right, v up.
+-- A stroke is { u0, u1, v0, v1 }, or { diag = { u0, v0, u1, v1 } } for a slanted bar.
+local function letterStrokes(ch: string)
+	local l0, r0, b0, t0, t = -LETTER_W / 2, LETTER_W / 2, -LETTER_H / 2, LETTER_H / 2, STROKE
+	if ch == "S" then
+		return {
+			{ l0, r0, t0 - t, t0 },
+			{ r0 - t, r0, t0 - 0.72, t0 }, -- terminal tick, so it reads S and not 5
+			{ l0, l0 + t, 0, t0 },
+			{ l0, r0, -t / 2, t / 2 },
+			{ r0 - t, r0, b0, 0 },
+			{ l0, r0, b0, b0 + t },
+			{ l0, l0 + t, b0, b0 + 0.72 },
+		}
+	elseif ch == "T" then
+		return { { l0, r0, t0 - t, t0 }, { -t / 2, t / 2, b0, t0 - t / 2 } }
+	elseif ch == "O" then
+		return { { l0, r0, t0 - t, t0 }, { l0, r0, b0, b0 + t }, { l0, l0 + t, b0, t0 }, { r0 - t, r0, b0, t0 } }
+	elseif ch == "R" then
+		return {
+			{ l0, l0 + t, b0, t0 },
+			{ l0, r0 - 0.1, t0 - t, t0 },
+			{ r0 - t, r0, -0.05, t0 - 0.1 },
+			{ l0, r0 - 0.1, -t / 2 - 0.05, t / 2 - 0.05 },
+			{ diag = { -0.12, -0.05, r0 - 0.24, b0 + 0.2 } },
+		}
+	else -- "E"
+		return {
+			{ l0, l0 + t, b0, t0 },
+			{ l0, r0, t0 - t, t0 },
+			{ l0, r0 - 0.32, -t / 2, t / 2 },
+			{ l0, r0, b0, b0 + t },
+		}
+	end
+end
+
+-- Soft bloom: faint concentric discs with no hot core, so it can sit behind lettering without
+-- washing it out (Kit.halo / coldHalo are for bare bulbs).
+local function softHalo(part: BasePart, studs: number, color: Color3, name: string?)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = name or "Halo"
+	gui.Size = UDim2.fromScale(studs, studs)
+	gui.LightInfluence = 0
+	gui.Brightness = 1.4
+	gui.MaxDistance = 120
+	gui.Parent = part
+	for i, spec in { { 1, 0.965 }, { 0.74, 0.945 }, { 0.5, 0.92 }, { 0.3, 0.9 } } do
+		local ring = Instance.new("Frame")
+		ring.Name = "Ring" .. i
+		ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.Position = UDim2.fromScale(0.5, 0.5)
+		ring.Size = UDim2.fromScale(spec[1], spec[1])
+		ring.BackgroundColor3 = color:Lerp(Color3.fromRGB(236, 228, 255), (i - 1) / 5)
+		ring.BackgroundTransparency = spec[2]
+		ring.BorderSizePixel = 0
+		ring.ZIndex = i
+		ring.Parent = gui
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = ring
+	end
+	return gui
+end
+
+local function buildStoreSign(front: Instance)
+	local sign = Kit.folder(front, "StoreSign")
+	sign.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	local W, H, D, c = SIGN_W, SIGN_H, SIGN_D, SIGN_BEVEL
+	local topY = FOYER_CEIL - 1.6 -- under the foyer's downstand beam (bottom at FOYER_CEIL - 1.4)
+	local centre = Vector3.new(FRONT_X + 0.85 + D / 2, topY - H / 2, DOOR_ZC)
+	-- the viewer's frame: X to the right as you face the sign from the foyer, Y up, +Z out of the wall
+	local view = CFrame.lookAt(centre, centre - Vector3.xAxis)
+	local function at(u: number, v: number, z: number): CFrame
+		return view * CFrame.new(u, v, z)
+	end
+	sign.WorldPivot = view
+	sign:SetAttribute("Width", W)
+	sign:SetAttribute("Height", H)
+	sign:SetAttribute("Depth", D)
+
+	-- panel: brushed body set back by the bevel, glossy face slab in front, chamfered front edges.
+	-- WedgePart's slope faces +Y/-Z; turned 180 about Y it faces up-and-out (+Y/+Z), then rolled
+	-- about Z for the other three edges.
+	local body =
+		box(sign, "SignBody", Vector3.new(W, H, D - c), at(0, 0, -c / 2), SIGN_METAL, Enum.Material.Metal, DETAIL)
+	local face = box(
+		sign,
+		"SignFace",
+		Vector3.new(W - 2 * c, H - 2 * c, c),
+		at(0, 0, D / 2 - c / 2),
+		SIGN_GLOSS,
+		Enum.Material.SmoothPlastic,
+		DETAIL
+	)
+	face.Reflectance = 0.14
+	local zb = D / 2 - c / 2
+	for _, spec in
+		{
+			{ Vector3.new(W, c, c), at(0, H / 2 - c / 2, zb) * CFrame.Angles(0, math.pi, 0) },
+			{ Vector3.new(W, c, c), at(0, -H / 2 + c / 2, zb) * CFrame.Angles(math.pi, 0, 0) },
+			{
+				Vector3.new(H - 2 * c, c, c),
+				at(W / 2 - c / 2, 0, zb) * CFrame.Angles(0, 0, -math.pi / 2) * CFrame.Angles(0, math.pi, 0),
+			},
+			{
+				Vector3.new(H - 2 * c, c, c),
+				at(-W / 2 + c / 2, 0, zb) * CFrame.Angles(0, 0, math.pi / 2) * CFrame.Angles(0, math.pi, 0),
+			},
+		}
+	do
+		local bevel = Kit.wedge(sign, "Bevel", spec[1], spec[2], SIGN_BEVEL_COLOR, Enum.Material.Metal, DETAIL)
+		bevel.Reflectance = 0.2
+	end
+
+	-- recessed LED strips above and below the letters: a dark channel with a run of neon segments
+	local stripLen = W - 2 * c - 0.8
+	local segs = 14
+	for row, v in { H / 2 - c - 0.2, -(H / 2 - c - 0.2) } do
+		box(
+			sign,
+			"LedChannel",
+			Vector3.new(stripLen + 0.12, 0.12, 0.02),
+			at(0, v, D / 2 + 0.01),
+			Color3.fromRGB(4, 3, 6),
+			Enum.Material.SmoothPlastic,
+			DETAIL
+		)
+		for i = 1, segs do
+			local u = -stripLen / 2 + (i - 0.5) * stripLen / segs
+			local seg = box(
+				sign,
+				"LedSeg",
+				Vector3.new(stripLen / segs - 0.07, 0.05, 0.02),
+				at(u, v, D / 2 + 0.025),
+				LED,
+				Enum.Material.Neon,
+				DETAIL
+			)
+			seg:SetAttribute("Row", row)
+			seg:SetAttribute("Index", i)
+			seg:SetAttribute("U", u)
+		end
+	end
+
+	-- the letters
+	local word = "STORE"
+	local span = #word * LETTER_W + (#word - 1) * LETTER_GAP
+	for i = 1, #word do
+		local ch = string.sub(word, i, i)
+		local lu = -span / 2 + LETTER_W / 2 + (i - 1) * (LETTER_W + LETTER_GAP)
+		local letter = Kit.folder(sign, "Letter" .. i)
+		letter:SetAttribute("Letter", i)
+		letter:SetAttribute("Char", ch)
+		letter:SetAttribute("U", lu)
+		for _, s in letterStrokes(ch) do
+			local cf, len, thick
+			if s.diag then
+				local d = s.diag
+				local a, b = Vector2.new(d[1], d[2]), Vector2.new(d[3], d[4])
+				local mid = (a + b) / 2
+				local dir = b - a
+				len, thick = dir.Magnitude + STROKE * 0.5, STROKE
+				cf = at(lu + mid.X, mid.Y, 0) * CFrame.Angles(0, 0, math.atan2(dir.Y, dir.X))
+			else
+				len, thick = s[2] - s[1], s[4] - s[3]
+				cf = at(lu + (s[1] + s[2]) / 2, (s[3] + s[4]) / 2, 0)
+			end
+			-- gunmetal return, neon face cap just proud of it, violet backing a little larger behind
+			box(
+				letter,
+				"Body",
+				Vector3.new(len, thick, LETTER_D),
+				cf * CFrame.new(0, 0, D / 2 + LETTER_D / 2),
+				LETTER_BODY,
+				Enum.Material.Metal,
+				DETAIL
+			)
+			box(
+				letter,
+				"Face",
+				Vector3.new(len - 0.06, thick - 0.06, 0.04),
+				cf * CFrame.new(0, 0, D / 2 + LETTER_D + 0.01),
+				LETTER_FACE,
+				Enum.Material.Neon,
+				DETAIL
+			)
+			local glow = box(
+				letter,
+				"Glow",
+				Vector3.new(len + 0.3, thick + 0.3, 0.03),
+				cf * CFrame.new(0, 0, D / 2 + 0.02),
+				LETTER_GLOW,
+				Enum.Material.Neon,
+				DETAIL
+			)
+			glow.Transparency = 0.38
+		end
+		local anchor =
+			box(letter, "HaloAnchor", Vector3.new(0.2, 0.2, 0.2), at(lu, 0, D / 2 + 0.2), COLD, nil, INVISIBLE)
+		softHalo(anchor, 4.4, VIOLET)
+		if ch == "O" then
+			-- something in the O, now and then (StoreSignFX opens them)
+			for _, du in { -0.24, 0.24 } do
+				local eye = box(
+					letter,
+					"Eye",
+					Vector3.new(0.17, 0.17, 0.17),
+					at(lu + du, 0.12, D / 2 + 0.08),
+					Color3.fromRGB(235, 228, 255),
+					Enum.Material.Neon,
+					DETAIL
+				)
+				eye.Shape = Enum.PartType.Ball
+				eye.Transparency = 1
+				local halo = coldHalo(eye, 0.9)
+				halo.Name = "EyeHalo"
+				halo.Enabled = false
+			end
+		end
+	end
+
+	-- chevrons either side, pointing in at the name (lit in turn by the client)
+	local arm, thick = 0.8, 0.11
+	for _, side in { -1, 1 } do
+		for step = 1, 3 do
+			local tipU = side * (span / 2 + 0.6 + (step - 1) * 0.5)
+			for _, up in { 1, -1 } do
+				local dir = Vector2.new(side * math.cos(math.rad(45)), up * math.sin(math.rad(45)))
+				local mid = Vector2.new(tipU, 0) + dir * (arm / 2)
+				local bar = box(
+					sign,
+					"Chevron",
+					Vector3.new(arm + thick / 2, thick, 0.05),
+					at(mid.X, mid.Y, D / 2 + 0.04) * CFrame.Angles(0, 0, math.atan2(dir.Y, dir.X)),
+					CHEVRON,
+					Enum.Material.Neon,
+					DETAIL
+				)
+				bar:SetAttribute("Step", step)
+				if step == 1 and up == 1 then
+					softHalo(bar, 2.2, CHEVRON)
+				end
+			end
+		end
+	end
+
+	-- underglow along the bottom edge, a wall wash behind (the panel stands off the wall so the
+	-- violet rims its silhouette), a fill out front and a wash down over the doorway
+	local under = box(
+		sign,
+		"Underglow",
+		Vector3.new(W - 1, 0.05, 0.1),
+		at(0, -H / 2 - 0.03, D / 2 - 0.15),
+		LED,
+		Enum.Material.Neon,
+		DETAIL
+	)
+	under.Transparency = 0.15
+	local wallWash = Instance.new("SurfaceLight")
+	wallWash.Face = Enum.NormalId.Front -- the wall side (the panel's -Z)
+	wallWash.Angle = 180
+	wallWash.Range = 5
+	wallWash.Brightness = 2.5
+	wallWash.Color = Color3.fromRGB(140, 70, 255)
+	wallWash.Shadows = false
+	wallWash.Parent = body
+	Kit.pointLight(face, 13, 0.7, false, Color3.fromRGB(150, 100, 255))
+	local lamp =
+		box(sign, "SignLight", Vector3.new(0.2, 0.2, 0.2), at(0, -H / 2 - 0.3, D / 2 + 0.6), COLD, nil, INVISIBLE)
+	local spot = Instance.new("SpotLight")
+	spot.Face = Enum.NormalId.Bottom
+	spot.Angle = 120
+	spot.Range = 16
+	spot.Brightness = 1.4
+	spot.Color = Color3.fromRGB(170, 130, 255)
+	spot.Shadows = false
+	spot.Parent = lamp
+
+	-- slim subline plate hung under the panel on two rods
+	local plateW, plateH = 11.5, 0.54
+	local plateV = -H / 2 - 0.14 - plateH / 2
+	local plate = box(
+		sign,
+		"SublinePlate",
+		Vector3.new(plateW, plateH, 0.16),
+		at(0, plateV, D / 2 - 0.12),
+		SIGN_GLOSS,
+		Enum.Material.SmoothPlastic,
+		DETAIL
+	)
+	plate.Reflectance = 0.14
+	glowText(
+		plate,
+		Enum.NormalId.Back, -- the +Z face, toward the foyer
+		"LANTERNS  ·  PILLS  ·  LOCKPICKS  ·  LASERS",
+		Enum.Font.GothamMedium,
+		Color3.fromRGB(214, 200, 246),
+		Color3.fromRGB(130, 80, 230),
+		80
+	)
+	box(
+		sign,
+		"SublineEdge",
+		Vector3.new(plateW, 0.04, 0.04),
+		at(0, plateV + plateH / 2 + 0.01, D / 2 - 0.02),
+		LED,
+		Enum.Material.Neon,
+		DETAIL
+	)
+	for _, u in { -plateW / 2 + 0.8, plateW / 2 - 0.8 } do
+		cyl(sign, "PlateRod", 0.16, 0.06, at(u, -H / 2 - 0.07, D / 2 - 0.12), C.steel, Enum.Material.Metal, DETAIL)
+	end
+
+	-- mounting: brushed stand-offs back to the wall above the portal header, and two fine cables
+	-- up to the ceiling clear of the downstand beam
+	local back = -D / 2
+	local wallZ = -(centre.X - FRONT_X) -- the wall, in the sign's z
+	for _, u in { -6, 6 } do
+		local len = back - wallZ
+		cyl(
+			sign,
+			"Standoff",
+			len,
+			0.22,
+			at(u, H / 2 - 0.5, (back + wallZ) / 2) * CFrame.Angles(math.pi / 2, 0, 0),
+			C.steel,
+			Enum.Material.Metal,
+			DETAIL
+		)
+		cyl(
+			sign,
+			"StandoffRose",
+			0.06,
+			0.5,
+			at(u, H / 2 - 0.5, wallZ + 0.03) * CFrame.Angles(math.pi / 2, 0, 0),
+			C.steel,
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+	local cableLen = FOYER_CEIL - topY
+	for _, u in { -7.5, 7.5 } do
+		box(
+			sign,
+			"Cable",
+			Vector3.new(0.04, cableLen, 0.04),
+			at(u, H / 2 + cableLen / 2, -0.05),
+			C.steel,
+			Enum.Material.Metal,
+			DETAIL
+		)
+	end
+
+	-- the volume the client fills with violet haze and rising motes
+	box(sign, "HazeVolume", Vector3.new(W - 2, 0.6, 1.2), at(0, -H / 2 - 1.0, D / 2 + 0.7), COLD, nil, INVISIBLE)
+	return sign
+end
+
+------------------------------------------------------------------------------------------
 -- Storefront (foyer side)
 ------------------------------------------------------------------------------------------
 local function buildStorefront(shop: Instance)
 	local front = Kit.folder(shop, "Storefront")
-	local rng = Kit.rng
 	local x = FRONT_X
 	local width = DOOR.z1 - DOOR.z0
 	local top = DOOR.y1
@@ -307,125 +698,8 @@ local function buildStorefront(shop: Instance)
 		DETAIL
 	)
 
-	-- the marquee: a black enamel box sign hung on chains in front of the header, violet trim, cold
-	-- back-lit lettering, a violet neon tube that flickers now and then, and a ring of pale bulbs
-	local signW, signH, signD = width + 1.6, 2.5, 0.7
-	local sy = top + 0.6 + signH / 2
-	local sx = x + 1.15
-	local signCf = facing(Vector3.new(sx, sy, DOOR_ZC), Vector3.xAxis) -- Front face looks into the foyer
-	local case = box(front, "SignCase", Vector3.new(signW, signH, signD), signCf, BLACK, Enum.Material.Metal)
-	box(
-		front,
-		"SignRim",
-		Vector3.new(signW + 0.24, signH + 0.24, signD - 0.2),
-		signCf * CFrame.new(0, 0, 0.05),
-		Color3.fromRGB(70, 36, 112),
-		Enum.Material.Metal,
-		DETAIL
-	)
-	local face = box(
-		front,
-		"SignFace",
-		Vector3.new(signW - 1.1, 1.55, 0.05),
-		signCf * CFrame.new(0, 0.22, -signD / 2 - 0.02),
-		Color3.fromRGB(8, 6, 10),
-		Enum.Material.SmoothPlastic,
-		DETAIL
-	)
-	glowText(face, Enum.NormalId.Front, "GIFT SHOP", Enum.Font.Bodoni, SIGN_TEXT, VIOLET)
-	local sub = box(
-		front,
-		"SignSub",
-		Vector3.new(signW - 4, 0.42, 0.05),
-		signCf * CFrame.new(0, -0.82, -signD / 2 - 0.02),
-		Color3.fromRGB(8, 6, 10),
-		nil,
-		DETAIL
-	)
-	glowText(
-		sub,
-		Enum.NormalId.Front,
-		"LANTERNS  ·  PILLS  ·  LOCKPICKS",
-		Enum.Font.Antique,
-		Color3.fromRGB(206, 190, 240),
-		Color3.fromRGB(130, 80, 230),
-		80
-	)
-	-- neon tube framing the lettering
-	local neonViolet = Color3.fromRGB(160, 100, 255)
-	local tw, th = signW - 0.7, signH - 0.5
-	for _, spec in
-		{
-			{ Vector3.new(tw, 0.09, 0.09), CFrame.new(0, th / 2, 0) },
-			{ Vector3.new(tw, 0.09, 0.09), CFrame.new(0, -th / 2, 0) },
-			{ Vector3.new(0.09, th, 0.09), CFrame.new(-tw / 2, 0, 0) },
-			{ Vector3.new(0.09, th, 0.09), CFrame.new(tw / 2, 0, 0) },
-		}
-	do
-		local tube = box(
-			front,
-			"NeonTube",
-			spec[1],
-			signCf * CFrame.new(0, 0, -signD / 2 - 0.1) * spec[2],
-			neonViolet,
-			Enum.Material.Neon,
-			DETAIL
-		)
-		tube.Transparency = 0.15
-		tube:SetAttribute("NeonFlicker", true)
-	end
-	-- marquee bulbs along the top and bottom edges: pale violet-white, about one in five burnt out
-	local bulbs = 14
-	for i = 0, bulbs - 1 do
-		local u = (i + 0.5) / bulbs - 0.5
-		for _, v in { 1, -1 } do
-			local dead = rng:NextNumber() < 0.2
-			local bulb = box(
-				front,
-				dead and "DeadBulb" or "MarqueeBulb",
-				Vector3.new(0.26, 0.26, 0.26),
-				signCf * CFrame.new(u * (signW - 0.4), v * (signH / 2 - 0.02), -signD / 2 - 0.02),
-				dead and Color3.fromRGB(64, 60, 72) or Color3.fromRGB(150, 130, 215),
-				dead and Enum.Material.Glass or Enum.Material.Neon,
-				DETAIL
-			)
-			bulb.Shape = Enum.PartType.Ball
-			bulb.Transparency = dead and 0.1 or 0.35
-		end
-	end
-	-- light: a dim violet wash down the front of the wall and onto the foyer floor
-	local lamp = box(
-		front,
-		"SignLight",
-		Vector3.new(0.2, 0.2, 0.2),
-		signCf * CFrame.new(0, -signH / 2 - 0.2, -0.6),
-		COLD,
-		nil,
-		INVISIBLE
-	)
-	local spot = Instance.new("SpotLight")
-	spot.Face = Enum.NormalId.Bottom
-	spot.Angle = 120
-	spot.Range = 16
-	spot.Brightness = 1.4
-	spot.Color = Color3.fromRGB(170, 130, 255)
-	spot.Shadows = false
-	spot.Parent = lamp
-	Kit.pointLight(case, 9, 0.5, false, Color3.fromRGB(140, 80, 255))
-	-- chains up to the foyer ceiling
-	for _, dz in { -signW / 2 + 1, signW / 2 - 1 } do
-		local cz = DOOR_ZC + dz
-		box(
-			front,
-			"Chain",
-			Vector3.new(0.08, FOYER_CEIL - (sy + signH / 2), 0.08),
-			Vector3.new(sx, (FOYER_CEIL + sy + signH / 2) / 2, cz),
-			C.steel,
-			Enum.Material.Metal,
-			DETAIL
-		)
-		cyl(front, "ChainPlate", 0.12, 0.6, CFrame.new(sx, FOYER_CEIL - 0.06, cz), C.steel, Enum.Material.Metal, DETAIL)
-	end
+	-- the STORE sign over the doorway (and its client VFX: client/StoreSignFX)
+	buildStoreSign(front)
 
 	-- concrete planters with ferns either side of the doorway
 	for _, z in { DOOR.z0 - 2.4, DOOR.z1 + 2.4 } do
