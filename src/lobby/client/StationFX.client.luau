@@ -138,7 +138,7 @@ local function stepRings(t: number, camPos: Vector3)
 			continue
 		end
 		local s = 0.5 + 0.5 * math.sin(t * (2 * math.pi / PULSE_PERIOD) + r.phase)
-		r.rim.Transparency = 0.05 + 0.32 * (1 - s)
+		r.rim.Transparency = 0.12 + 0.3 * (1 - s)
 		if r.band then
 			r.band.Transparency = 0.22 + 0.4 * s -- the inner band breathes against the rim
 		end

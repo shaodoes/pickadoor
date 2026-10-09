@@ -42,15 +42,19 @@ local function setupLighting()
 	pcall(function()
 		Lighting.Technology = Enum.Technology.Future
 	end)
+	-- A NEUTRAL base: the per-room mood (Shared/RoomMoods, blended client-side by Mood.client) owns the
+	-- Atmosphere / ColorCorrection / Bloom / ambients at runtime. These values mirror RoomMoods.Base so
+	-- Edit mode and the first frame in game look the same. Exposure and bloom stay low: highlights
+	-- (neon, halos, the white avatar under a lantern) must hold detail instead of blowing out.
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
-	Lighting.Ambient = Color3.fromRGB(14, 14, 15) -- dim: light lives in pools around the lamps
+	Lighting.Ambient = Color3.fromRGB(13, 13, 14) -- dim: light lives in pools around the lamps
 	Lighting.OutdoorAmbient = Color3.fromRGB(14, 17, 19)
 	Lighting.EnvironmentDiffuseScale = 0.25
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.5
 	Lighting.GlobalShadows = true
 	Lighting.ShadowSoftness = 0.3
-	Lighting.ExposureCompensation = 0.2
+	Lighting.ExposureCompensation = 0
 
 	for _, child in Lighting:GetChildren() do
 		if child:IsA("PostEffect") or child:IsA("Atmosphere") or child:IsA("Sky") then
@@ -60,23 +64,25 @@ local function setupLighting()
 	local atmosphere = Instance.new("Atmosphere")
 	atmosphere.Density = 0.3
 	atmosphere.Offset = 0
-	atmosphere.Color = Color3.fromRGB(62, 62, 58)
+	atmosphere.Color = Color3.fromRGB(60, 60, 56)
 	atmosphere.Decay = Color3.fromRGB(28, 32, 34)
 	atmosphere.Glare = 0
-	atmosphere.Haze = 1.1
+	atmosphere.Haze = 1.2
 	atmosphere.Parent = Lighting
 
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.TintColor = Color3.fromRGB(255, 248, 240)
-	cc.Contrast = 0.18
+	cc.Name = "ColorCorrection"
+	cc.TintColor = Color3.fromRGB(255, 246, 236)
+	cc.Contrast = 0.16
 	cc.Saturation = -0.06
 	cc.Brightness = 0
 	cc.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.8
-	bloom.Size = 32
-	bloom.Threshold = 1.25 -- low enough that the amber lamp cores bloom into a soft halo
+	bloom.Name = "Bloom"
+	bloom.Intensity = 0.45
+	bloom.Size = 24
+	bloom.Threshold = 1.7 -- only the hottest cores (flames, neon rims) bloom; halos do the soft glow
 	bloom.Parent = Lighting
 
 	local dof = Instance.new("DepthOfFieldEffect")

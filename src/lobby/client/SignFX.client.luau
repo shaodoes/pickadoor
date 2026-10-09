@@ -43,6 +43,9 @@ local HOT = Color3.fromRGB(230, 50, 40)
 local WARM = Color3.fromRGB(255, 184, 122)
 local FLICKER = { 0.05, 0.08, 0.04, 0.2, 0.06 } -- alternating out / lit durations
 local ATTR_EVERY = 1 / 15
+-- ceiling on how far pulse + sweep + tension may push a halo or light over its built brightness
+-- (stacked, they reached ~2.7x: PICK A DOOR's red bled into a blown-out smear at full tension)
+local MAX_BOOST = 1.6
 local rng = Random.new()
 
 local gameSettings = UserSettings():GetService("UserGameSettings")
@@ -730,7 +733,7 @@ local function stepSign(s, t: number, dt: number, camPos: Vector3?)
 				g.part.Transparency = math.clamp(g.transparency - k * 0.3 - glowLift - 0.2 * boost, 0, 1)
 			end
 			for _, h in letter.halos do
-				h.gui.Brightness = h.brightness * (1 + k * 0.6 + tension * 0.5 + 0.6 * boost)
+				h.gui.Brightness = h.brightness * math.min(1 + k * 0.6 + tension * 0.5 + 0.6 * boost, MAX_BOOST)
 			end
 		end
 	end
@@ -806,9 +809,9 @@ local function stepSign(s, t: number, dt: number, camPos: Vector3?)
 
 	-- halos and lights breathe; a letter dropping out dims the sign's light a touch
 	for _, h in s.halos do
-		h.gui.Brightness = h.brightness * (1 + k * 0.5 + tension * 0.5)
+		h.gui.Brightness = h.brightness * math.min(1 + k * 0.5 + tension * 0.5, MAX_BOOST)
 	end
-	local lightK = (1 + k * 0.6 + tension * 0.8) * (if anyOut then 0.8 else 1)
+	local lightK = math.min(1 + k * 0.6 + tension * 0.8, MAX_BOOST) * (if anyOut then 0.8 else 1)
 	for _, l in s.lights do
 		l.light.Brightness = l.brightness * lightK
 	end

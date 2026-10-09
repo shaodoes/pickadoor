@@ -226,7 +226,7 @@ function Kit.halo(part: BasePart, studs: number, color: Color3?)
 	gui.Name = "Halo"
 	gui.Size = UDim2.fromScale(studs, studs) -- billboard scale is in studs
 	gui.LightInfluence = 0
-	gui.Brightness = 1.6
+	gui.Brightness = 1.3 -- the core ring stacks to ~87% opaque near-white: above ~1.4 it blooms flat white
 	gui.MaxDistance = 120
 	gui.Parent = part
 	for i, spec in { { 1, 0.95 }, { 0.78, 0.92 }, { 0.58, 0.88 }, { 0.4, 0.8 }, { 0.24, 0.62 }, { 0.12, 0.35 } } do

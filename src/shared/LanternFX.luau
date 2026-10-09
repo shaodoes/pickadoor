@@ -27,6 +27,9 @@ local Sfx = require(script.Parent.Sfx)
 
 local LanternFX = {}
 LanternFX.flameParts = LanternBuilder.flameParts
+-- Multiplier on the held lantern's light (and, softened, its halo). 1 = as built (the dark trials);
+-- the lit lobby turns it down (Mood.client), or the lantern a few studs from a white avatar blows out.
+LanternFX.heldLightScale = 1
 
 local noise = math.noise
 local rng = Random.new()
@@ -46,6 +49,7 @@ export type FlameState = {
 	baseLight: number,
 	baseHalo: number,
 	burst: number, -- 1 right after the equip flare, decaying to 0
+	scale: number, -- light/halo multiplier (the held lantern follows LanternFX.heldLightScale)
 }
 
 local function newFlameState(parts: LanternBuilder.FlameParts): FlameState
@@ -55,6 +59,7 @@ local function newFlameState(parts: LanternBuilder.FlameParts): FlameState
 		baseLight = parts.light and parts.light.Brightness or 0,
 		baseHalo = parts.halo and parts.halo.Brightness or 0,
 		burst = 0,
+		scale = 1,
 	}
 end
 
@@ -84,10 +89,10 @@ local function stepFlame(state: FlameState, t: number, dt: number)
 		innerMesh.Offset = Vector3.new(leanX * 0.02, (innerStretch - 1) * 0.08, leanZ * 0.02)
 	end
 	if parts.light then
-		parts.light.Brightness = state.baseLight * (1 + flick * 0.16 + burst * 0.9)
+		parts.light.Brightness = state.baseLight * state.scale * (1 + flick * 0.16 + burst * 0.9)
 	end
 	if parts.halo then
-		parts.halo.Brightness = state.baseHalo * (1 + flick * 0.1 + burst * 0.6)
+		parts.halo.Brightness = state.baseHalo * (0.4 + 0.6 * state.scale) * (1 + flick * 0.1 + burst * 0.6)
 	end
 end
 
@@ -206,6 +211,7 @@ local function stepHeld(dt: number)
 	end
 
 	if h.flame then
+		h.flame.scale = LanternFX.heldLightScale
 		stepFlame(h.flame, t, dt)
 	end
 end

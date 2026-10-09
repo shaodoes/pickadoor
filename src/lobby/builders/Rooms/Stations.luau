@@ -132,13 +132,16 @@ local function ring(model: Model, centre: Vector3, radius: number, color: Color3
 	end
 	disc("RingHaze", radius * 2 + 0.5, 0.02, 0.72, color, NEON)
 	local rim = disc("Ring", radius * 2, 0.03, 0.02, color, NEON)
-	-- the inside is a faint tinted wash (the floor shows through), not a dark mat; the rim band left
-	-- showing round it is ~0.4 wide on the big rings
+	-- the inside is a tinted wash over the neon rim disc below it; it has to hide most of that disc
+	-- (at 0.82 the whole medallion read as one blown-out neon puddle), so only the ~0.4 rim band
+	-- left showing round it burns bright
 	local rimWidth = 0.3 * math.min(k, 1.35)
-	disc("RingInlay", (radius - rimWidth) * 2, 0.04, 0.82, dark:Lerp(color, 0.35), Enum.Material.SmoothPlastic)
+	disc("RingInlay", (radius - rimWidth) * 2, 0.04, 0.38, dark:Lerp(color, 0.3), Enum.Material.SmoothPlastic)
 	local inner = radius * 0.64
 	disc("RingBand", inner * 2, 0.05, 0.2, color, NEON)
-	disc("RingCore", inner * 2 - 0.26 * k, 0.06, 0.9, color, NEON)
+	-- the band is a full neon disc too: a second inlay leaves only its ~0.13 edge showing
+	disc("RingInlay", inner * 2 - 0.26 * k, 0.055, 0.38, dark:Lerp(color, 0.3), Enum.Material.SmoothPlastic)
+	disc("RingCore", inner * 2 - 0.26 * k, 0.06, 0.94, color, NEON)
 
 	-- twelve ticks between the bands, every third one longer (a clock face on the floor)
 	local outer = radius - rimWidth - 0.1
