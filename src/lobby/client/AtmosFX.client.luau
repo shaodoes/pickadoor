@@ -16,7 +16,6 @@
 	  PoolMist     a volume over the natatorium water.
 	  any BasePart with attribute NeonFlicker = true flickers now and then.
 	Plus, without anchors:
-	  pendant lamps   every `Lamp` model with a `Core` part gets a faint volumetric cone under it
 	  door gaps       every Lobby.Pads.<pad>.UnderGlow gets a fan of light across the floor that
 	                  follows the brightness DoorFX gives UnderGlow.Leak (DoorFX's instances are only read)
 
@@ -965,7 +964,7 @@ end
 ------------------------------------------------------------------------------------------
 -- Pendant lamps: a faint volumetric cone of light under each Lamp's core
 ------------------------------------------------------------------------------------------
-local function lampCone(lamp: Instance, core: BasePart)
+local function _lampCone(lamp: Instance, core: BasePart)
 	local light = core:FindFirstChildOfClass("SpotLight") or core:FindFirstChildOfClass("PointLight")
 	if not light then
 		return nil
@@ -1107,8 +1106,8 @@ function FX.consider(inst: Instance)
 			safely(make, inst)
 		elseif inst:GetAttribute("NeonFlicker") == true then
 			safely(neonFlicker, inst)
-		elseif inst.Name == "Core" and inst.Parent and inst.Parent.Name == "Lamp" and not bySource[inst.Parent] then
-			safely(lampCone, inst.Parent, inst)
+		-- (pendant lamps no longer get a volumetric cone under the bulb: it read as unnatural;
+		-- they rely on their halo glow and real light. _lampCone is kept but unused.)
 		elseif inst.Name == "UnderGlow" then
 			local pad = inst.Parent
 			if pad and pad.Parent and pad.Parent.Name == "Pads" and not bySource[pad] then
