@@ -382,7 +382,8 @@ local function updateStencil(t: number, tension: number)
 		heroTension = tension
 		heroSign:SetAttribute("Tension", tension)
 	end
-	if t >= nextHaloUpdate and #halos > 0 then
+	-- with the 3D hero sign up, the old flat stencil layers stay hidden (only the ghost glitch shows)
+	if not heroSign and t >= nextHaloUpdate and #halos > 0 then
 		nextHaloUpdate = t + 1 / 15
 		-- denser mist at the peak of each breath and as the countdown runs out
 		local thicken = math.clamp(pulse * 0.5 + tension * 0.6, 0, 1)
@@ -394,8 +395,9 @@ local function updateStencil(t: number, tension: number)
 		if heroSign and math.random() < 0.3 then
 			-- the letters drop out for a beat (SignFX)
 			heroSign:SetAttribute("Blink", t)
-		elseif math.random() < 0.3 then
-			-- a quick flicker instead of different words
+		elseif not heroSign and math.random() < 0.3 then
+			-- a quick flicker instead of different words (old flat stencil only: with the 3D sign the
+			-- label is an invisible ghost, and setting it back to 0 left the flat text showing)
 			stencilLabel.TextTransparency = 0.7
 			task.delay(0.06, function()
 				stencilLabel.TextTransparency = 0
