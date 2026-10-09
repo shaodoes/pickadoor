@@ -184,6 +184,22 @@ Config.Sounds = {
 	}, -- wood creak 2.0 s, metal creak 1.1 s
 	DoorOpen = { id = 9114144822, volume = 0.7, speed = 0.8, near = 8, far = 90, group = "World", world = true }, -- long door squeak, 5.9 s
 	DoorWhoosh = { id = 133215732722481, volume = 0.6, speed = 0.55, near = 8, far = 90, group = "World", world = true }, -- low long whoosh, 0.7 s
+	-- [cutscene] door-entry sequence (DoorFX / DoorCutscene). PLACEHOLDERS reusing vetted ids: swap for a
+	-- real heavy door slam, a dying-bulb crackle and a spray-can hiss when picked.
+	DoorSlam = {
+		id = 9113525391, -- body slam against a car door, 1.55 s (same as StalkerHit), played low and heavy
+		alt = { 9113525643 },
+		volume = 0.95,
+		speed = 0.72,
+		near = 10,
+		far = 110,
+		group = "World",
+		world = true,
+	},
+	DoorGutter = { id = 9114277757, volume = 0.22, speed = 0.55, near = 5, far = 45, group = "World", world = true }, -- electric zap, slowed: the light guttering
+	CutsceneBoom = { id = 9116878293, volume = 0.55, speed = 0.75 }, -- distant metal stress boom (2D): the slam, felt
+	CutsceneSting = { id = 9114352428, volume = 0.45, speed = 0.9 }, -- the PickChime bell (2D): under the title card
+	TitleSpray = { id = 9116496074, volume = 0.3, speed = 1.8 }, -- SteamBurst air release, sped up (2D): spray can
 	PaperRustle = {
 		id = 9118184352, -- paper handling 2.3 s
 		alt = { 9125724963, 9117233449 }, -- slow rustle 2.1 s, rustle 2.0 s

@@ -8,10 +8,20 @@
 -- Optional decoration from Signage is found by attribute: GUI children tagged SignLayer move/retext
 -- with the main label, SignHalo ones breathe. Anything missing is simply skipped.
 --   clock     the second hand ticks and slips back; while any pad counts down the hands run backwards
+--   entry     when a party goes through (pad CutsceneStart), everyone sees the same thing on the shared
+--             DoorEntry timeline: the door creaks fully open, light pours out, fog rolls over the threshold,
+--             the party walks in and fades into the black, the light gutters and the door slams (onlookers
+--             close by get a small camera jolt; the party's own camera is DoorCutscene's)
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local DoorEntry = require(Shared:WaitForChild("DoorEntry"))
+local Sfx = require(Shared:WaitForChild("Sfx"))
+
+local localPlayer = Players.LocalPlayer
 
 local lobby = workspace:WaitForChild("Lobby")
 local pads = lobby:WaitForChild("Pads")
@@ -71,6 +81,72 @@ local function glitch(label: TextLabel, options: { string }, original: string, b
 end
 
 ------------------------------------------------------------------------------------------
+-- Door entry: onlooker camera jolt, and party members fading into the black as they go through
+------------------------------------------------------------------------------------------
+local jolt = { amp = 0, dur = 1, t0 = -math.huge, seed = 0 }
+local function onlookerJolt(amp: number, duration: number)
+	jolt.amp, jolt.dur, jolt.t0, jolt.seed = amp, duration, os.clock(), math.random() * 100
+end
+
+-- character -> how far it has faded (0 visible .. 1 gone)
+local swallowed: { [Model]: number } = {}
+
+local function setCharacterFade(character: Model, alpha: number)
+	for _, obj in character:GetDescendants() do
+		if obj:IsA("BasePart") or obj:IsA("Decal") then
+			obj.LocalTransparencyModifier = alpha
+		end
+	end
+end
+
+-- After the camera scripts (their transparency controller would otherwise reset the local character).
+RunService:BindToRenderStep("DoorEntryFX", Enum.RenderPriority.Camera.Value + 3, function(dt)
+	-- onlookers' small jolt when a door slams nearby (additive on top of the normal camera this frame)
+	local age = os.clock() - jolt.t0
+	if age < jolt.dur then
+		local k = jolt.amp * (1 - age / jolt.dur) ^ 2
+		local x = age * 22
+		local cam = workspace.CurrentCamera
+		cam.CFrame *= CFrame.Angles(
+			math.noise(x, jolt.seed, 0) * k,
+			math.noise(x, jolt.seed, 7) * k,
+			math.noise(x, jolt.seed, 14) * k * 0.5
+		)
+	end
+
+	-- party members are swallowed by the dark once they are through the opening
+	local seen: { [Model]: boolean } = {}
+	for _, player in Players:GetPlayers() do
+		local padName = player:GetAttribute("CutscenePad")
+		local character = player.Character
+		if typeof(padName) ~= "string" or not character then
+			continue
+		end
+		local pad = pads:FindFirstChild(padName)
+		local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if not pad or not root or typeof(pad:GetAttribute("CutsceneStart")) ~= "number" then
+			continue
+		end
+		seen[character] = true
+		local target = if DoorEntry.inside(pad, root.Position, 0.5) then 1 else 0
+		local previous = swallowed[character] or 0
+		local current = previous + math.clamp(target - previous, -dt * 3, dt * 1.8)
+		swallowed[character] = current
+		if current > 0 or previous > 0 then
+			setCharacterFade(character, current)
+		end
+	end
+	for character in swallowed do
+		if not seen[character] then
+			swallowed[character] = nil
+			if character.Parent then
+				setCharacterFade(character, 0)
+			end
+		end
+	end
+end)
+
+------------------------------------------------------------------------------------------
 -- Doors
 ------------------------------------------------------------------------------------------
 local doors = {}
@@ -80,13 +156,36 @@ for _, pad in pads:GetChildren() do
 	local title = gui:WaitForChild("Title")
 	local status = gui:WaitForChild("Status")
 	local mode = pad:GetAttribute("Mode")
+	local fog = pad:WaitForChild("Fog"):WaitForChild("Fog")
+	-- light pouring out of the black passage while the door stands open (client-only, off otherwise)
+	local pour: SpotLight? = nil
+	local void = pad:FindFirstChild("Void")
+	if void and void:IsA("BasePart") then
+		local leakColor = (pad:WaitForChild("UnderGlow"):WaitForChild("Leak") :: PointLight).Color
+		local light = Instance.new("SpotLight")
+		light.Name = "EntryPour"
+		light.Face = Enum.NormalId.Back -- +Z, out through the doorway into the hall
+		light.Angle = 75
+		light.Range = 26
+		light.Brightness = 0
+		light.Shadows = true
+		light.Color = leakColor:Lerp(Color3.new(1, 1, 1), 0.35)
+		light.Enabled = false
+		light.Parent = void
+		pour = light
+	end
 	table.insert(doors, {
 		pad = pad,
 		leaf = leaf,
 		hinge = leaf:GetAttribute("Hinge") or leaf:GetPivot(),
 		leak = pad:WaitForChild("UnderGlow"):WaitForChild("Leak"),
 		spill = pad:WaitForChild("FloorSpill"),
-		fog = pad:WaitForChild("Fog"):WaitForChild("Fog"),
+		fog = fog,
+		fogSpeed = fog.Speed,
+		pour = pour,
+		inScene = false,
+		gutteredFor = nil :: number?,
+		slammedFor = nil :: number?,
 		title = title,
 		titleText = title.Text,
 		titlePos = title.Position,
@@ -120,22 +219,83 @@ local function updateDoor(d, t: number, dt: number): number
 	local tension = tensionOf(pad)
 	local launching = pad:GetAttribute("Launching") == true
 	local timeLeft = pad:GetAttribute("TimeLeft") or 0
+	local start = pad:GetAttribute("CutsceneStart")
+	local scene = launching and typeof(start) == "number"
+	local ct = if scene then workspace:GetServerTimeNow() - start else 0
 
 	-- light under the door: a slow uneven breathing that swells with the countdown
 	local breathe = math.noise(t * 1.3, d.seed) * 0.35
-	d.leak.Brightness = launching and 2.2 or (0.5 + breathe + tension * 1.4)
-	d.leak.Range = launching and 13 or (9 + tension * 4)
-	d.spill.Transparency = launching and 0.45 or (0.86 - tension * 0.35)
-	d.fog.Rate = launching and 25 or (2 + tension * 10)
+	if scene then
+		-- the door-entry sequence: light floods out of the opening, gutters, dies with the slam
+		local l = DoorEntry.light(ct, d.seed)
+		local after = ct >= DoorEntry.SLAM
+		d.leak.Brightness = if after then 0.35 else 0.6 + l * 3.4
+		d.leak.Range = 10 + l * 9
+		d.spill.Transparency = 0.85 - l * 0.6
+		if d.pour then
+			d.pour.Enabled = l > 0.01
+			d.pour.Brightness = l * 6
+		end
+		-- fog rolls out over the threshold while it's open; the slam blows one last puff out
+		local puff = after and ct < DoorEntry.SLAM + 0.5
+		d.fog.Rate = if puff then 90 elseif after then 3 else 12 + l * 55
+		local push = if puff then 3 else l * 2
+		d.fog.Speed = NumberRange.new(0.5 + push, 1.2 + push * 1.4)
+		d.inScene = true
+
+		if ct >= DoorEntry.GUTTER and d.gutteredFor ~= start then
+			d.gutteredFor = start
+			if ct < DoorEntry.SLAM then
+				Sfx.at(d.leak.Parent, "DoorGutter", { jitter = 0.08 })
+			end
+		end
+		if ct >= DoorEntry.SLAM and d.slammedFor ~= start then
+			d.slammedFor = start
+			if ct < DoorEntry.SLAM + 1 then -- don't replay it for someone who just joined
+				Sfx.at(d.leak.Parent, "DoorSlam", { jitter = 0.04 })
+				-- cut AmbientSound's long opening squeak off with the slam
+				local point = workspace.Terrain:FindFirstChild("DoorSound_" .. pad.Name)
+				for _, sound in if point then point:GetChildren() else {} do
+					if sound:IsA("Sound") and sound.Name == "DoorOpen" then
+						sound:Stop()
+					end
+				end
+				local cam = workspace.CurrentCamera
+				local dist = (cam.CFrame.Position - d.hinge.Position).Magnitude
+				if dist < 45 and not localPlayer:GetAttribute("CutscenePad") then
+					onlookerJolt(0.02 * (1 - dist / 45) + 0.004, 0.45)
+				end
+			end
+		end
+	else
+		if d.inScene then
+			d.inScene = false
+			d.fog.Speed = d.fogSpeed
+			if d.pour then
+				d.pour.Enabled = false
+			end
+		end
+		d.leak.Brightness = launching and 2.2 or (0.5 + breathe + tension * 1.4)
+		d.leak.Range = launching and 13 or (9 + tension * 4)
+		d.spill.Transparency = launching and 0.45 or (0.86 - tension * 0.35)
+		d.fog.Rate = launching and 25 or (2 + tension * 10)
+	end
 
 	-- the leaf: rattles harder as time runs out, swings open when the party leaves
-	d.open += ((launching and 1 or 0) - d.open) * math.min(dt * 2.5, 1)
-	local rattle = 0
-	if tension > 0 then
-		local strength = (timeLeft <= 5 and 0.05 or 0.012) * tension
-		rattle = math.noise(t * 22, d.seed) * strength
+	-- (all the way, on the DoorEntry timeline, when there's a cutscene; the old 32 degree peek otherwise)
+	local angle
+	if scene then
+		d.open = 0
+		angle = -DoorEntry.doorAngle(ct)
+	else
+		d.open += ((launching and 1 or 0) - d.open) * math.min(dt * 2.5, 1)
+		local rattle = 0
+		if tension > 0 then
+			local strength = (timeLeft <= 5 and 0.05 or 0.012) * tension
+			rattle = math.noise(t * 22, d.seed) * strength
+		end
+		angle = -d.open * math.rad(32) + rattle
 	end
-	local angle = -d.open * math.rad(32) + rattle
 	if math.abs(angle - d.lastAngle) > 1e-4 then
 		d.leaf:PivotTo(d.hinge * CFrame.Angles(0, angle, 0))
 		d.lastAngle = angle
