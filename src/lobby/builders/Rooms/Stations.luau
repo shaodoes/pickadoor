@@ -20,7 +20,7 @@
 		    PointerTip at its tip). A negative rotation about the hinge's Z kicks the tip to the
 		    viewer's right, the way the pegs push it when the wheel turns clockwise.
 		ChallengeStation.Desk (Model): the archivist's counter, top at y 3.1; he stands behind it at
-		    Layout.Stations.Challenges.npc (built by ArchivistService), so the floor there stays clear.
+		    Layout.Stations.Challenges.npc (built by Npcs/Archivist), so the floor there stays clear.
 
 	Everything except the chest body, the wheel's frame and the desk carcass is Kit.DETAIL.
 	Roughly 360 parts in all (the chest and the wheel are built 1.7x their design size; same count).

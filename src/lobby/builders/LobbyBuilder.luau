@@ -16,7 +16,7 @@
 		DoorHall (y 0)   through the arch at the back of the hall: six doors, the clock, PICK A DOOR
 
 	Modules: Kit (helpers), Layout (plan), Shell (floors/walls/ceilings), Furniture, Clutter, Signage,
-	Rooms/* (one per room), Natatorium.
+	Rooms/* (one per room), Npcs (Teeth, the Librarian, Mr. Ashby), Natatorium.
 ]]
 local Lighting = game:GetService("Lighting")
 
@@ -121,6 +121,10 @@ function LobbyBuilder.build()
 	if stations then
 		stations.build(root)
 	end
+	-- the residents, baked in so they stand in place in Edit mode too: Teeth behind the store counter,
+	-- the Librarian (and his lectern) in the foyer, Mr. Ashby at the Challenges desk. Static here; the
+	-- lobby services adopt these copies at runtime and bring them to life.
+	require(Builders.Npcs).build(root)
 	-- keep the vaults out of the stairwell shaft that rises above the foyer
 	Natatorium.build(root, { { hs.x0 - 2, hs.x1 + 2, hs.z0 - 2, hs.z1 + 2 } })
 	root.Parent = workspace

@@ -1,5 +1,5 @@
 --[[
-	Mr. Ashby, the archivist, on the client (ArchivistService builds him at the Challenges desk):
+	Mr. Ashby, the archivist, on the client (Npcs/Archivist bakes him in at the Challenges desk):
 	  * his head follows you when you're near; left alone he bends over the ledger and writes
 	  * ghostly touches: faint cold motes drifting off him and a slow waver in his cold light
 	  * stepping onto the challenges ring (LocalPlayer attribute AtStation = "Challenges") gets a

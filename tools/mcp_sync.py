@@ -45,13 +45,23 @@ def emit_directory(out, directory, var, depth):
     for filename in sorted(os.listdir(directory)):
         path = os.path.join(directory, filename)
         if os.path.isdir(path):
+            # a directory with an init script becomes that script, its other files its children (Rojo)
             child = "dir%d" % depth
-            out.append('%sdo local %s = ensure(%s, "%s", "Folder")' % (indent, child, var, filename))
+            init_name = next((f for f in sorted(os.listdir(path)) if kind(f)[0] == "init"), None)
+            if init_name:
+                source = open(os.path.join(path, init_name), encoding="utf-8").read().replace("\r\n", "\n")
+                out.append(
+                    '%sdo local %s = ensure(%s, "%s", "%s")' % (indent, child, var, filename, kind(init_name)[1])
+                )
+                out.append("%s\t%s.Source = %s" % (indent, child, long_string(source)))
+                out.append("%s\tcount += 1" % indent)
+            else:
+                out.append('%sdo local %s = ensure(%s, "%s", "Folder")' % (indent, child, var, filename))
             emit_directory(out, path, child, depth + 1)
             out.append("%send" % indent)
             continue
         name, class_name = kind(filename)
-        if not name:
+        if not name or name == "init":
             continue
         source = open(path, encoding="utf-8").read().replace("\r\n", "\n")
         out.append('%sensure(%s, "%s", "%s").Source = %s' % (indent, var, name, class_name, long_string(source)))

@@ -97,10 +97,10 @@ function Hall.build(root: Instance)
 		Furniture.floorLamp(model, Vector3.new(ROOM.x0 + 3, Y, -1.5))
 	end
 
-	-- left middle: two study desks with green banker lamps, chairs on both sides. The archivist's desk
-	-- (Layout.Stations.Challenges) sits in the alcove between them; the front one is shorter (8 long,
-	-- z 9.2..17.2) so the daily chest's ring fits in the front-left pocket beyond it.
-	for _, spec in { { z = -11, length = 12, seats = 6, bulb = 3.5 }, { z = 13.2, length = 8, seats = 4, bulb = 2.5 } } do
+	-- left middle: two long study desks with green banker lamps, chairs on both sides. The archivist's
+	-- desk (Layout.Stations.Challenges) sits in the alcove between them; the daily chest stands off the
+	-- front one's +X side, by the walkway.
+	for _, spec in { { z = -11, length = 12, seats = 6, bulb = 3.5 }, { z = 15, length = 12, seats = 6, bulb = 3.5 } } do
 		local z = spec.z
 		local cf = CFrame.new(-17, Y, z) * faceE -- desk runs along Z
 		if Furniture.studyDesk then
@@ -142,7 +142,7 @@ function Hall.build(root: Instance)
 	for _, z in { 22, 8, -6 } do
 		Kit.bareBulb(model, Vector3.new(5, CEIL - 4.2, z), 22, 1.1, z == 8, "globe", CEIL)
 	end
-	Furniture.bookPile(model, Vector3.new(-4, Y, 6), 6)
+	Furniture.bookPile(model, Vector3.new(-13.5, Y, 25.5), 6) -- under the front wall shelves
 	Furniture.bookPile(model, Vector3.new(-25.5, Y, -18.2), 5) -- back-left corner, clear of the desks
 	if Furniture.boxes then
 		Furniture.boxes(model, CFrame.new(ROOM.x1 - 3, Y, 9.5) * CFrame.Angles(0, 0.3, 0), 2)
@@ -172,7 +172,7 @@ function Hall.build(root: Instance)
 	-- papers: a trail from the stair foot to the arch, sheets everywhere else; notes on the walls
 	local blocked = {
 		{ -21, -13, -19, -3 },
-		{ -21, -13, 8, 18.5 }, -- study desks
+		{ -21, -13, 7, 23 }, -- study desks
 		{ 24, 28, 21, 30 }, -- bookcase
 		{ 21, 28, 6, 16 },
 		{ 21, 28, -16, -6 }, -- reading tables
@@ -180,7 +180,7 @@ function Hall.build(root: Instance)
 		-- reward stations (Layout.Stations), object + ring
 		{ -21.5, -7, -3, 7.2 }, -- archivist's desk, catalogue + ring
 		{ 7.4, 20.6, -20, -4.8 }, -- Wheel of Fate + ring
-		{ -22.5, -8.8, 18, 28.3 }, -- daily chest + ring
+		{ -10.6, 2.6, 6.4, 16.6 }, -- daily chest + ring
 		{ 21, 30, -20, -16.5 }, -- back-right planter
 	}
 	Clutter.papers(

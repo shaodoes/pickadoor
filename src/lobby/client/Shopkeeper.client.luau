@@ -1,6 +1,6 @@
 --[[
-	The Shopkeeper ("Teeth") on the client. ShopkeeperService builds him from anchored parts and
-	stores the rest pose as attributes (Rest / Bone / BoneName / Pivot, see the service); here the
+	The Shopkeeper ("Teeth") on the client. Npcs/Shopkeeper (baked into the lobby) builds him from anchored parts and
+	stores the rest pose as attributes (Rest / Bone / BoneName / Pivot, see that module); here the
 	parts are re-posed every frame (a local, visual-only change) so he
 	  * breathes, sways and lets his arms drift while idle
 	  * turns his head to follow you when you're near

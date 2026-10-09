@@ -1,7 +1,7 @@
 --[[
 	The arrival foyer (floor y = 6): you come down the old wooden stairs from the house, land by the
 	spawn, and look straight across the foyer and down the wide concrete stair into the reading hall.
-	Also here: the chalkboard leaderboard, the patch-notes board, the Librarian's spot (GuideService),
+	Also here: the chalkboard leaderboard, the patch-notes board, the Librarian and his lectern (Npcs/Librarian),
 	and the store's storefront on the left wall (built by Rooms/Shop).
 ]]
 local Builders = script.Parent.Parent

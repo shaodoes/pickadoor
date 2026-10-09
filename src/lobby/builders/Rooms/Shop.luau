@@ -1,7 +1,7 @@
 --[[
 	The Store: Teeth's room. The one room in the lobby that goes dark: black and deep purple where
-	everything else is warm. The shopkeeper himself (a tall black-purple grinning thing) is built at runtime
-	by ShopkeeperService at Layout.Shopkeeper, behind the counter; the floor there (x -25..-22, z 50..56)
+	everything else is warm. The shopkeeper himself (a tall black-purple grinning thing) is built by
+	Npcs/Shopkeeper at Layout.Shopkeeper, behind the counter; the floor there (x -25..-22, z 50..56)
 	is kept clear of props.
 
 	Two halves:

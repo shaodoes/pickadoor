@@ -54,15 +54,17 @@ Layout.Shopkeeper = { position = Vector3.new(-23.4, 6.1, 53.2), facing = Vector3
 --              x -19.2..-18.0; he stands 1.75 behind it, clear of the nook rug (x <= -21.15).
 --   Wheel      back-right, dead ahead from the stair, a big centrepiece turned toward its ring; its
 --              plinth stays inside the back wall (z >= -19.8) and left of the reading table (x <= 20.2)
---   Daily      front-left pocket (in front of the window-nook armchairs, x >= -23.6), facing +X; the
---              front study desk is shortened to clear it (Hall.luau)
+--   Daily      out in the open in the middle of the hall, just left of the stair->arch walkway: in
+--              view from the stair foot (and from the top of the grand stair). The ring sits between
+--              the walkway (x >= ~4 here) and the front-left pillar (-8, 17.5); the chest stands on its
+--              -X side, turned to face the ring and the players coming down from the stair.
 -- ring = floor centre (y = hall floor), object = floor-level CFrame whose -Z (LookVector) is the front.
 -- radius = the ring's bright rim AND the client trigger (Rewards.client: inside radius enters, +1 stays).
 Layout.Stations = {
 	Daily = {
-		ring = Vector3.new(-14.5, 0, 23),
+		ring = Vector3.new(-2.3, 0, 11.6),
 		radius = 4.7,
-		object = CFrame.lookAt(Vector3.new(-20.8, 0, 23), Vector3.new(-14.5, 0, 23)),
+		object = CFrame.lookAt(Vector3.new(-8.6, 0, 10.4), Vector3.new(-2.3, 0, 11.6)),
 	},
 	Wheel = {
 		ring = Vector3.new(12.6, 0, -9.8),
