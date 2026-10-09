@@ -23,7 +23,7 @@
 		    Layout.Stations.Challenges.npc (built by ArchivistService), so the floor there stays clear.
 
 	Everything except the chest body, the wheel's frame and the desk carcass is Kit.DETAIL.
-	Roughly 360 parts in all.
+	Roughly 360 parts in all (the chest and the wheel are built 1.7x their design size; same count).
 ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -115,26 +115,32 @@ local function tri(
 	)
 end
 
--- The glowing floor medallion: a bright neon rim with a soft haze outside it, a dark inlay, a
+-- The glowing floor medallion: a bright neon rim with a soft haze just outside it, a dark inlay, a
 -- second fainter band, tick marks between the bands and a keyhole in the middle. Every layer is
 -- 0.012 thick and stacked 0.01 apart, all within 0.08 of the floor (just above any rug).
+-- The rim's outer edge is exactly `radius`, the same circle the client uses as the trigger (only the
+-- faint haze reaches 0.25 past it). Ticks, band and keyhole grow with the radius (k = 1 at radius 3).
 local function ring(model: Model, centre: Vector3, radius: number, color: Color3, yaw: number): BasePart
 	local dark = color:Lerp(Color3.fromRGB(12, 10, 10), 0.84)
+	local k = radius / 3
 	local function disc(name: string, dia: number, h: number, transparency: number, col: Color3, material)
 		local part = cyl(model, name, 0.012, dia, CFrame.new(centre.X, FLOOR + h, centre.Z) * TO_Y, col, material)
 		part.Transparency = transparency
 		return part
 	end
-	disc("RingHaze", radius * 2 + 0.9, 0.02, 0.72, color, NEON)
+	disc("RingHaze", radius * 2 + 0.5, 0.02, 0.72, color, NEON)
 	local rim = disc("Ring", radius * 2, 0.03, 0.02, color, NEON)
-	-- the inside is a faint tinted wash (the floor shows through), not a dark mat
-	disc("RingInlay", radius * 2 - 0.6, 0.04, 0.82, dark:Lerp(color, 0.35), Enum.Material.SmoothPlastic)
+	-- the inside is a faint tinted wash (the floor shows through), not a dark mat; the rim band left
+	-- showing round it is ~0.4 wide on the big rings
+	local rimWidth = 0.3 * math.min(k, 1.35)
+	disc("RingInlay", (radius - rimWidth) * 2, 0.04, 0.82, dark:Lerp(color, 0.35), Enum.Material.SmoothPlastic)
 	local inner = radius * 0.64
 	disc("RingBand", inner * 2, 0.05, 0.2, color, NEON)
-	disc("RingCore", inner * 2 - 0.26, 0.06, 0.9, color, NEON)
+	disc("RingCore", inner * 2 - 0.26 * k, 0.06, 0.9, color, NEON)
 
 	-- twelve ticks between the bands, every third one longer (a clock face on the floor)
-	local outer = radius - 0.18
+	local outer = radius - rimWidth - 0.1
+	local thin = math.min(k, 1.4)
 	for i = 0, 11 do
 		local long = i % 3 == 0
 		local len = (outer - inner) * (if long then 0.7 else 0.4)
@@ -142,22 +148,38 @@ local function ring(model: Model, centre: Vector3, radius: number, color: Color3
 		local cf = CFrame.new(centre.X, FLOOR + 0.05, centre.Z)
 			* CFrame.Angles(0, yaw + i * math.pi / 6, 0)
 			* CFrame.new(0, 0, -mid)
-		local mark =
-			box(model, "RingTick", Vector3.new(if long then 0.09 else 0.06, 0.012, len), cf, color, NEON, DETAIL)
+		local mark = box(
+			model,
+			"RingTick",
+			Vector3.new((if long then 0.09 else 0.06) * thin, 0.012, len),
+			cf,
+			color,
+			NEON,
+			DETAIL
+		)
 		mark.Transparency = 0.2
 	end
 	-- keyhole, its slot pointing at whoever steps on from the front
 	local key = CFrame.new(centre.X, FLOOR + 0.07, centre.Z) * CFrame.Angles(0, yaw, 0)
-	cyl(model, "RingKeyhole", 0.012, 0.5, key * CFrame.new(0, 0, -0.12) * TO_Y, color, NEON).Transparency = 0.15
-	box(model, "RingKeyhole", Vector3.new(0.2, 0.012, 0.55), key * CFrame.new(0, 0, 0.22), color, NEON, DETAIL).Transparency =
+	cyl(model, "RingKeyhole", 0.012, 0.5 * k, key * CFrame.new(0, 0, -0.12 * k) * TO_Y, color, NEON).Transparency = 0.15
+	box(
+		model,
+		"RingKeyhole",
+		Vector3.new(0.2 * k, 0.012, 0.55 * k),
+		key * CFrame.new(0, 0, 0.22 * k),
+		color,
+		NEON,
+		DETAIL
+	).Transparency =
 		0.15
 
-	-- a small, soft light so the ring tints the floor and anyone standing on it (no shadows)
+	-- a soft light so the ring tints the floor and anyone standing on it (no shadows); its reach
+	-- follows the ring's size, the brightness stays low (StationFX breathes it 0.3..0.55)
 	local point = Instance.new("Attachment")
 	point.Name = "Glow"
 	point.Parent = rim
 	point.WorldPosition = Vector3.new(centre.X, FLOOR + 0.8, centre.Z)
-	local light = Kit.pointLight(point, 8, 0.45, false, color)
+	local light = Kit.pointLight(point, math.clamp(radius * 2.6, 8, 13), 0.45, false, color)
 	light.Name = "RingLight"
 
 	model:SetAttribute("RingRadius", radius)
@@ -225,32 +247,46 @@ local function stationModel(parent: Instance, name: string, station: string): Mo
 end
 
 ------------------------------------------------------------------------------------------
--- Daily: an old iron-banded chest with a barrel lid
+-- Daily: an old iron-banded treasure chest with a barrel lid
 ------------------------------------------------------------------------------------------
-local CW, CD, CH = 2.2, 1.4, 1.0 -- body width (X), depth (Z), height
+-- Designed at unit scale (body 2.2 x 1.4 x 1.0) and built CHEST_SCALE times bigger: every offset
+-- goes through at() and every size through sz() / the scaled ball and cylinder helpers below.
+local CHEST_SCALE = 1.7
+local CW, CD, CH = 2.2, 1.4, 1.0 -- body width (X), depth (Z), height (unit scale)
 local FEET = 0.16
 local LR = CD / 2 -- the barrel lid's radius
+-- built size: 3.74 wide (CW) x 2.38 deep (CD), 3.16 to the top of the closed lid
 
 local function buildChest(parent: Instance, base: CFrame): Model
+	local S = CHEST_SCALE
 	local model = Kit.folder(parent, "Chest")
 	local function at(x: number, y: number, z: number): CFrame
-		return base * CFrame.new(x, y, z)
+		return base * CFrame.new(x * S, y * S, z * S)
+	end
+	local function sz(x: number, y: number, z: number): Vector3
+		return Vector3.new(x, y, z) * S
+	end
+	local function sball(p: Instance, name: string, dia: number, cf: CFrame, color: Color3, material)
+		return ball(p, name, dia * S, cf, color, material)
+	end
+	local function scyl(p: Instance, name: string, length: number, dia: number, cf: CFrame, color: Color3, material)
+		return cyl(p, name, length * S, dia * S, cf, color, material)
 	end
 	local top = FEET + CH
 
 	-- carcass on four iron ball feet
-	local body = box(model, "Body", Vector3.new(CW, CH, CD), at(0, FEET + CH / 2, 0), AGED_WOOD, PLANKS)
+	local body = box(model, "Body", sz(CW, CH, CD), at(0, FEET + CH / 2, 0), AGED_WOOD, PLANKS)
 	model.PrimaryPart = body
 	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			ball(model, "Foot", 0.24, at(sx * (CW / 2 - 0.14), 0.12, sz * (CD / 2 - 0.14)), IRON, METAL)
+		for _, sz2 in { -1, 1 } do
+			sball(model, "Foot", 0.24, at(sx * (CW / 2 - 0.14), 0.12, sz2 * (CD / 2 - 0.14)), IRON, METAL)
 			-- brass corner caps, top and bottom
 			for _, y in { FEET + 0.15, top - 0.15 } do
 				box(
 					model,
 					"Corner",
-					Vector3.new(0.18, 0.3, 0.18),
-					at(sx * (CW / 2 - 0.07), y, sz * (CD / 2 - 0.07)),
+					sz(0.18, 0.3, 0.18),
+					at(sx * (CW / 2 - 0.07), y, sz2 * (CD / 2 - 0.07)),
 					BRASS,
 					METAL,
 					DETAIL
@@ -260,52 +296,35 @@ local function buildChest(parent: Instance, base: CFrame): Model
 	end
 	-- plank seams on the front, iron bands round the bottom and the rim, straps front and back
 	for _, y in { FEET + CH * 0.36, FEET + CH * 0.68 } do
-		box(model, "Seam", Vector3.new(CW - 0.4, 0.025, 0.02), at(0, y, -CD / 2 - 0.005), INK, WOOD, DETAIL)
+		box(model, "Seam", sz(CW - 0.4, 0.025, 0.02), at(0, y, -CD / 2 - 0.005), INK, WOOD, DETAIL)
 	end
-	box(model, "Band", Vector3.new(CW + 0.04, 0.12, CD + 0.04), at(0, FEET + 0.09, 0), IRON, METAL, DETAIL)
-	box(model, "Band", Vector3.new(CW + 0.04, 0.1, CD + 0.04), at(0, top - 0.06, 0), IRON, METAL, DETAIL)
+	box(model, "Band", sz(CW + 0.04, 0.12, CD + 0.04), at(0, FEET + 0.09, 0), IRON, METAL, DETAIL)
+	box(model, "Band", sz(CW + 0.04, 0.1, CD + 0.04), at(0, top - 0.06, 0), IRON, METAL, DETAIL)
 	for _, sx in { -1, 1 } do
 		local x = sx * CW * 0.31
-		for _, sz in { -1, 1 } do
-			box(
-				model,
-				"Strap",
-				Vector3.new(0.17, CH, 0.04),
-				at(x, FEET + CH / 2, sz * (CD / 2 + 0.02)),
-				IRON,
-				METAL,
-				DETAIL
-			)
+		for _, sz2 in { -1, 1 } do
+			box(model, "Strap", sz(0.17, CH, 0.04), at(x, FEET + CH / 2, sz2 * (CD / 2 + 0.02)), IRON, METAL, DETAIL)
 		end
 		for _, y in { FEET + 0.3, FEET + 0.62 } do
-			ball(model, "Rivet", 0.07, at(x, y, -CD / 2 - 0.045), BRASS, METAL)
+			sball(model, "Rivet", 0.07, at(x, y, -CD / 2 - 0.045), BRASS, METAL)
 		end
 		-- carrying handle on each end: two brackets and an iron bar
 		local hx = sx * (CW / 2 + 0.03)
-		for _, sz in { -1, 1 } do
-			box(
-				model,
-				"HandleBracket",
-				Vector3.new(0.06, 0.14, 0.06),
-				at(hx, FEET + CH * 0.62, sz * 0.24),
-				IRON,
-				METAL,
-				DETAIL
-			)
+		for _, sz2 in { -1, 1 } do
+			box(model, "HandleBracket", sz(0.06, 0.14, 0.06), at(hx, FEET + CH * 0.62, sz2 * 0.24), IRON, METAL, DETAIL)
 		end
-		cyl(model, "Handle", 0.54, 0.07, at(sx * (CW / 2 + 0.08), FEET + CH * 0.58, 0) * TO_Z, IRON, METAL)
+		scyl(model, "Handle", 0.54, 0.07, at(sx * (CW / 2 + 0.08), FEET + CH * 0.58, 0) * TO_Z, IRON, METAL)
 	end
 
 	-- brass lock plate with a keyhole
 	local plateY = top - 0.32
-	local plate =
-		box(model, "LockPlate", Vector3.new(0.46, 0.5, 0.04), at(0, plateY, -CD / 2 - 0.04), BRASS, METAL, DETAIL)
+	local plate = box(model, "LockPlate", sz(0.46, 0.5, 0.04), at(0, plateY, -CD / 2 - 0.04), BRASS, METAL, DETAIL)
 	plate.Reflectance = 0.05
-	ball(model, "Keyhole", 0.1, at(0, plateY + 0.02, -CD / 2 - 0.055), INK, Enum.Material.SmoothPlastic)
+	sball(model, "Keyhole", 0.1, at(0, plateY + 0.02, -CD / 2 - 0.055), INK, Enum.Material.SmoothPlastic)
 	box(
 		model,
 		"Keyhole",
-		Vector3.new(0.05, 0.13, 0.02),
+		sz(0.05, 0.13, 0.02),
 		at(0, plateY - 0.06, -CD / 2 - 0.065),
 		INK,
 		Enum.Material.SmoothPlastic,
@@ -316,17 +335,17 @@ local function buildChest(parent: Instance, base: CFrame): Model
 	box(
 		model,
 		"Lining",
-		Vector3.new(CW - 0.2, 0.03, CD - 0.2),
+		sz(CW - 0.2, 0.03, CD - 0.2),
 		at(0, top + 0.015, 0),
 		Color3.fromRGB(70, 18, 22),
 		Enum.Material.Fabric,
 		DETAIL
 	)
 	for _, spec in { { -0.35, 0.05, 0.62 }, { 0.2, -0.1, 0.56 }, { 0.55, 0.15, 0.44 } } do
-		ball(model, "Hoard", spec[3], at(spec[1], top - spec[3] * 0.22, spec[2]), GOLD, METAL)
+		sball(model, "Hoard", spec[3], at(spec[1], top - spec[3] * 0.22, spec[2]), GOLD, METAL)
 	end
 	for i, spec in { { -0.8, -0.3 }, { -0.05, 0.38 }, { 0.75, -0.3 }, { 0.4, 0.4 }, { -0.6, 0.35 } } do
-		cyl(
+		scyl(
 			model,
 			"Coin",
 			0.03,
@@ -339,14 +358,14 @@ local function buildChest(parent: Instance, base: CFrame): Model
 	local glow = box(
 		model,
 		"Glow",
-		Vector3.new(CW - 0.5, 0.3, CD - 0.5),
+		sz(CW - 0.5, 0.3, CD - 0.5),
 		at(0, top + 0.22, 0),
 		Color3.fromRGB(255, 196, 92),
 		NEON,
 		DETAIL
 	)
 	glow.Transparency = 1
-	local light = Kit.pointLight(glow, 10, 2.2, false, Color3.fromRGB(255, 190, 100))
+	local light = Kit.pointLight(glow, 8 * S, 2.2, false, Color3.fromRGB(255, 190, 100))
 	light.Name = "GlowLight"
 	light.Enabled = false
 
@@ -358,11 +377,14 @@ local function buildChest(parent: Instance, base: CFrame): Model
 	for k = -2, 2 do
 		local a = math.rad(k * 36)
 		local stave = axis * CFrame.Angles(a, 0, 0)
+		local function on(x: number, y: number): CFrame
+			return stave * CFrame.new(x * S, y * S, 0)
+		end
 		box(
 			lid,
 			"Stave",
-			Vector3.new(CW + 0.04, 0.12, chord),
-			stave * CFrame.new(0, LR - 0.06, 0),
+			sz(CW + 0.04, 0.12, chord),
+			on(0, LR - 0.06),
 			if k % 2 == 0 then LID_WOOD else AGED_WOOD,
 			PLANKS,
 			DETAIL
@@ -372,50 +394,34 @@ local function buildChest(parent: Instance, base: CFrame): Model
 			box(
 				lid,
 				"LidEnd",
-				Vector3.new(0.1, LR - 0.04, chord),
-				stave * CFrame.new(sx * (CW / 2 - 0.06), (LR - 0.04) / 2, 0),
+				sz(0.1, LR - 0.04, chord),
+				on(sx * (CW / 2 - 0.06), (LR - 0.04) / 2),
 				AGED_WOOD,
 				PLANKS,
 				DETAIL
 			)
 		end
 		for _, sx in { -1, 1 } do
-			local band = box(
-				lid,
-				"LidBand",
-				Vector3.new(0.18, 0.05, chord * 1.02),
-				stave * CFrame.new(sx * CW * 0.31, LR + 0.015, 0),
-				IRON,
-				METAL,
-				DETAIL
-			)
+			local band =
+				box(lid, "LidBand", sz(0.18, 0.05, chord * 1.02), on(sx * CW * 0.31, LR + 0.015), IRON, METAL, DETAIL)
 			if math.abs(k) <= 1 then
-				ball(lid, "Rivet", 0.07, band.CFrame * CFrame.new(0, 0.03, 0), BRASS, METAL)
+				sball(lid, "Rivet", 0.07, band.CFrame * CFrame.new(0, 0.03 * S, 0), BRASS, METAL)
 			end
 		end
 	end
 	-- brass edging along the lid's front and back bottom edges, and the hasp
-	for _, sz in { -1, 1 } do
-		box(
-			lid,
-			"LidEdge",
-			Vector3.new(CW + 0.08, 0.08, 0.06),
-			at(0, top + 0.04, sz * (LR - 0.02)),
-			BRASS,
-			METAL,
-			DETAIL
-		)
+	for _, sz2 in { -1, 1 } do
+		box(lid, "LidEdge", sz(CW + 0.08, 0.08, 0.06), at(0, top + 0.04, sz2 * (LR - 0.02)), BRASS, METAL, DETAIL)
 	end
-	box(lid, "Hasp", Vector3.new(0.2, 0.36, 0.04), at(0, top - 0.1, -CD / 2 - 0.075), IRON, METAL, DETAIL)
-	ball(lid, "HaspRing", 0.1, at(0, top - 0.24, -CD / 2 - 0.1), IRON, METAL)
+	box(lid, "Hasp", sz(0.2, 0.36, 0.04), at(0, top - 0.1, -CD / 2 - 0.075), IRON, METAL, DETAIL)
+	sball(lid, "HaspRing", 0.1, at(0, top - 0.24, -CD / 2 - 0.1), IRON, METAL)
 	-- hinge line along the back-top edge of the body (X axis)
-	local hinge =
-		box(lid, "LidHinge", Vector3.new(0.2, 0.2, 0.2), at(0, top, CD / 2), Color3.new(1, 1, 1), nil, INVISIBLE)
+	local hinge = box(lid, "LidHinge", sz(0.2, 0.2, 0.2), at(0, top, CD / 2), Color3.new(1, 1, 1), nil, INVISIBLE)
 	lid.PrimaryPart = hinge
 	lid.WorldPivot = hinge.CFrame
 
 	-- keep people from walking through the lid (the staves are non-colliding details)
-	box(model, "LidCollider", Vector3.new(CW, LR, CD), at(0, top + LR / 2, 0), Color3.new(1, 1, 1), nil, {
+	box(model, "LidCollider", sz(CW, LR, CD), at(0, top + LR / 2, 0), Color3.new(1, 1, 1), nil, {
 		Transparency = 1,
 		CanQuery = false,
 		CanTouch = false,
@@ -432,14 +438,21 @@ local function buildDaily(parent: Instance)
 	local yaw = yawToward(spec.ring, base.Position)
 	ring(model, spec.ring, spec.radius, info.color, yaw)
 	buildChest(model, base)
-	label(model, (base * CFrame.new(0, 3.5, 0)).Position, info.title, "free every day", info.color)
+	-- over the chest (lid top ~3.2): high enough to clear the lid swinging open and the coins rising
+	label(model, (base * CFrame.new(0, 5.6, 0)).Position, info.title, "free every day", info.color)
 	return model
 end
 
 ------------------------------------------------------------------------------------------
 -- Wheel of Fate
 ------------------------------------------------------------------------------------------
-local AXLE_Y = 4.2
+-- Designed at unit scale and built WHEEL_SCALE times bigger. Everything above the plinth is then
+-- lowered by WHEEL_DROP so the crest stays under the ceiling (16): the wheel (10.2 across) clears
+-- the plinth by ~0.5, the top beam tops out at ~12.9, the finials ~13.7 and the crest ~14.3.
+local WHEEL_SCALE = 1.7
+local WHEEL_DROP = 1.0
+local CREST_SCALE = 1.25 -- the little brass door on top stays smaller, under the title
+local AXLE_Y = 4.2 -- (unit scale; world ~6.14)
 local SEG_R = 2.55 -- segment wedges reach this radius at their corners
 local PEG_R = 2.72
 
@@ -450,41 +463,86 @@ local function buildWheel(parent: Instance)
 	local base = spec.object
 	local yaw = yawToward(spec.ring, base.Position)
 	ring(model, spec.ring, spec.radius, info.color, yaw)
+	local S = WHEEL_SCALE
+	-- at(): above the plinth (dropped); floor(): standing on the floor (plinth, shoes, braces)
 	local function at(x: number, y: number, z: number): CFrame
-		return base * CFrame.new(x, y, z)
+		return base * CFrame.new(x * S, y * S - WHEEL_DROP, z * S)
+	end
+	local function floor(x: number, y: number, z: number): CFrame
+		return base * CFrame.new(x * S, y * S, z * S)
+	end
+	local function sz(x: number, y: number, z: number): Vector3
+		return Vector3.new(x, y, z) * S
+	end
+	local function sball(p: Instance, name: string, dia: number, cf: CFrame, color: Color3, material)
+		return ball(p, name, dia * S, cf, color, material)
+	end
+	local function scyl(
+		p: Instance,
+		name: string,
+		length: number,
+		dia: number,
+		cf: CFrame,
+		color: Color3,
+		material,
+		extra
+	)
+		return cyl(p, name, length * S, dia * S, cf, color, material, extra)
 	end
 
 	-- frame: plinth, two legs, an axle beam behind the wheel and a top beam that holds the pointer
 	local frame = Kit.folder(model, "Frame")
-	box(frame, "Plinth", Vector3.new(6.9, 0.3, 1.9), at(0, 0.15, 0.3), C.darkWood, WOOD)
-	box(frame, "PlinthTrim", Vector3.new(6.9, 0.06, 0.06), at(0, 0.3, -0.66), BRASS, METAL, DETAIL)
+	box(frame, "Plinth", sz(6.9, 0.3, 1.9), floor(0, 0.15, 0.3), C.darkWood, WOOD)
+	box(frame, "PlinthTrim", sz(6.9, 0.06, 0.06), floor(0, 0.3, -0.66), BRASS, METAL, DETAIL)
+	local legBottom = 0.3 * S
+	local legTop = 8.2 * S - WHEEL_DROP -- the top beam's upper face
 	for _, sx in { -1, 1 } do
-		box(frame, "Leg", Vector3.new(0.38, 7.9, 0.38), at(sx * 3.15, 4.25, 0.55), C.darkWood, WOOD)
-		box(frame, "LegShoe", Vector3.new(0.56, 0.22, 0.56), at(sx * 3.15, 0.41, 0.55), BRASS, METAL, DETAIL)
-		box(frame, "LegCollar", Vector3.new(0.48, 0.14, 0.48), at(sx * 3.15, AXLE_Y, 0.55), BRASS, METAL, DETAIL)
-		ball(frame, "Finial", 0.42, at(sx * 3.15, 8.42, 0.55), BRASS, METAL)
+		box(
+			frame,
+			"Leg",
+			Vector3.new(0.38 * S, legTop - legBottom, 0.38 * S),
+			base * CFrame.new(sx * 3.15 * S, (legTop + legBottom) / 2, 0.55 * S),
+			C.darkWood,
+			WOOD
+		)
+		box(frame, "LegShoe", sz(0.56, 0.22, 0.56), floor(sx * 3.15, 0.41, 0.55), BRASS, METAL, DETAIL)
+		box(frame, "LegCollar", sz(0.48, 0.14, 0.48), at(sx * 3.15, AXLE_Y, 0.55), BRASS, METAL, DETAIL)
+		sball(frame, "Finial", 0.42, at(sx * 3.15, 8.42, 0.55), BRASS, METAL)
 		-- a raked brace from the plinth's back to each leg
 		box(
 			frame,
 			"Brace",
-			Vector3.new(0.18, 2.6, 0.18),
-			at(sx * 2.4, 1.3, 0.55) * CFrame.Angles(0, 0, sx * math.rad(-28)),
+			sz(0.18, 2.6, 0.18),
+			floor(sx * 2.4, 1.3, 0.55) * CFrame.Angles(0, 0, sx * math.rad(-28)),
 			C.darkWood,
 			WOOD,
 			DETAIL
 		)
 	end
-	box(frame, "AxleBeam", Vector3.new(6.3, 0.36, 0.3), at(0, AXLE_Y, 0.55), C.darkWood, WOOD)
-	box(frame, "TopBeam", Vector3.new(6.8, 0.34, 0.44), at(0, 8.0, 0.55), C.darkWood, WOOD)
-	box(frame, "TopTrim", Vector3.new(6.8, 0.06, 0.04), at(0, 8.0, 0.32), BRASS, METAL, DETAIL)
-	cyl(frame, "Axle", 0.6, 0.3, at(0, AXLE_Y, 0.3) * TO_Z, BRASS, METAL)
-	-- a little brass door on top of the frame
-	box(frame, "Crest", Vector3.new(0.7, 0.8, 0.08), at(0, 8.57, 0.55), BRASS, METAL, DETAIL)
-	cyl(frame, "CrestArch", 0.08, 0.7, at(0, 8.97, 0.55) * TO_Z, BRASS, METAL)
-	box(frame, "CrestDoor", Vector3.new(0.42, 0.62, 0.02), at(0, 8.6, 0.5), Color3.fromRGB(40, 26, 20), WOOD, DETAIL)
-	ball(frame, "CrestKnob", 0.07, at(0.12, 8.55, 0.48), BRASS, METAL)
+	box(frame, "AxleBeam", sz(6.3, 0.36, 0.3), at(0, AXLE_Y, 0.55), C.darkWood, WOOD)
+	box(frame, "TopBeam", sz(6.8, 0.34, 0.44), at(0, 8.0, 0.55), C.darkWood, WOOD)
+	box(frame, "TopTrim", sz(6.8, 0.06, 0.04), at(0, 8.0, 0.32), BRASS, METAL, DETAIL)
+	scyl(frame, "Axle", 0.6, 0.3, at(0, AXLE_Y, 0.3) * TO_Z, BRASS, METAL)
+	-- a little brass door on top of the frame (standing on the top beam, scaled a bit less)
+	local crestBase = at(0, 8.17, 0.55) -- top face of the top beam
+	local CS = CREST_SCALE
+	local function crest(x: number, y: number, z: number): CFrame
+		return crestBase * CFrame.new(x * CS, (y - 8.17) * CS, (z - 0.55) * CS)
+	end
+	box(frame, "Crest", Vector3.new(0.7, 0.8, 0.08) * CS, crest(0, 8.57, 0.55), BRASS, METAL, DETAIL)
+	cyl(frame, "CrestArch", 0.08 * CS, 0.7 * CS, crest(0, 8.97, 0.55) * TO_Z, BRASS, METAL)
+	box(
+		frame,
+		"CrestDoor",
+		Vector3.new(0.42, 0.62, 0.02) * CS,
+		crest(0, 8.6, 0.5),
+		Color3.fromRGB(40, 26, 20),
+		WOOD,
+		DETAIL
+	)
+	ball(frame, "CrestKnob", 0.07 * CS, crest(0.12, 8.55, 0.48), BRASS, METAL)
 	-- bracket reaching forward from the top beam to the pointer
-	box(frame, "PointerArm", Vector3.new(0.3, 0.22, 1.3), at(0, 7.9, -0.05), C.darkWood, WOOD, DETAIL)
+	box(frame, "PointerArm", sz(0.3, 0.22, 1.3), at(0, 7.9, -0.05), C.darkWood, WOOD, DETAIL)
 
 	-- rotor: everything that turns
 	local rotor = Kit.folder(model, "Rotor")
@@ -493,7 +551,7 @@ local function buildWheel(parent: Instance)
 	rotor.PrimaryPart = hub
 	rotor.WorldPivot = hubCF
 	local function h(x: number, y: number, z: number): CFrame
-		return hubCF * CFrame.new(x, y, z)
+		return hubCF * CFrame.new(x * S, y * S, z * S)
 	end
 	-- direction from the centre at `deg` clockwise from 12 o'clock (as seen from the front, +X is
 	-- the viewer's LEFT, so clockwise heads toward -X), and the clockwise tangent there
@@ -509,21 +567,22 @@ local function buildWheel(parent: Instance)
 		return hubCF:VectorToWorldSpace(v)
 	end
 	local function onFace(r: number, deg: number, z: number): CFrame
-		-- frame on the wheel face at radius r: up = outward, front (-Z) = toward the viewer
+		-- frame on the wheel face at radius r (unit scale): up = outward, front (-Z) = toward the viewer
 		local up = world(dir(deg))
 		local back = world(Vector3.new(0, 0, 1))
-		return CFrame.fromMatrix((hubCF * CFrame.new(dir(deg) * r + Vector3.new(0, 0, z))).Position, up:Cross(back), up)
+		local pos = (hubCF * CFrame.new((dir(deg) * r + Vector3.new(0, 0, z)) * S)).Position
+		return CFrame.fromMatrix(pos, up:Cross(back), up)
 	end
 
-	cyl(rotor, "Backing", 0.2, 6.0, h(0, 0, 0.15) * TO_Z, C.darkWood, WOOD, {}) -- solid: you can't walk through it
-	cyl(rotor, "Rim", 0.1, 5.72, h(0, 0, 0) * TO_Z, BRASS, METAL)
+	scyl(rotor, "Backing", 0.2, 6.0, h(0, 0, 0.15) * TO_Z, C.darkWood, WOOD, {}) -- solid: you can't walk through it
+	scyl(rotor, "Rim", 0.1, 5.72, h(0, 0, 0) * TO_Z, BRASS, METAL)
 
 	local seg = Rewards.SegmentAngle
 	local half = seg / 2
 	local a, b = SEG_R * math.cos(math.rad(half)), SEG_R * math.sin(math.rad(half))
 	for i, s in Rewards.Wheel do
 		local centreDeg = (i - 1) * seg
-		local corner = (hubCF * CFrame.new(dir(centreDeg) * a + Vector3.new(0, 0, -0.08))).Position
+		local corner = (hubCF * CFrame.new((dir(centreDeg) * a + Vector3.new(0, 0, -0.08)) * S)).Position
 		for _, side in { 1, -1 } do
 			local w = tri(
 				rotor,
@@ -531,9 +590,9 @@ local function buildWheel(parent: Instance)
 				corner,
 				world(-dir(centreDeg)),
 				world(tangent(centreDeg) * side),
-				a,
-				b,
-				0.06,
+				a * S,
+				b * S,
+				0.06 * S,
 				s.color,
 				WOOD
 			)
@@ -542,14 +601,13 @@ local function buildWheel(parent: Instance)
 		-- a little arched door on each segment, in a darker shade of its colour
 		local doorCF = onFace(1.2, centreDeg, -0.12)
 		local doorColor = s.color:Lerp(Color3.new(0, 0, 0), 0.45)
-		box(rotor, "SegDoor", Vector3.new(0.34, 0.5, 0.03), doorCF, doorColor, WOOD, DETAIL)
-		cyl(rotor, "SegDoorArch", 0.03, 0.34, doorCF * CFrame.new(0, 0.25, 0) * TO_Z, doorColor, WOOD)
-		ball(rotor, "SegKnob", 0.07, doorCF * CFrame.new(-0.09, -0.04, -0.03), BRASS, METAL)
+		box(rotor, "SegDoor", sz(0.34, 0.5, 0.03), doorCF, doorColor, WOOD, DETAIL)
+		scyl(rotor, "SegDoorArch", 0.03, 0.34, doorCF * CFrame.new(0, 0.25 * S, 0) * TO_Z, doorColor, WOOD)
+		sball(rotor, "SegKnob", 0.07, doorCF * CFrame.new(-0.09 * S, -0.04 * S, -0.03 * S), BRASS, METAL)
 		-- the prize, upright when the segment is at the top
-		local tag =
-			box(rotor, "SegLabel", Vector3.new(1.1, 0.42, 0.02), onFace(2.0, centreDeg, -0.12), C.paint, nil, INVISIBLE)
+		local tag = box(rotor, "SegLabel", sz(1.1, 0.42, 0.02), onFace(2.0, centreDeg, -0.12), C.paint, nil, INVISIBLE)
 		local gui, text = Kit.surfaceText(tag, Enum.NormalId.Front, s.label, nil, CREAM)
-		gui.PixelsPerStud = 100
+		gui.PixelsPerStud = 72 -- ~135 x 51 px per label: as crisp as before at the bigger size
 		gui.LightInfluence = 0.25
 		gui.Brightness = 1.4
 		text.FontFace = TITLE_FONT
@@ -562,20 +620,20 @@ local function buildWheel(parent: Instance)
 		box(
 			rotor,
 			"Divider",
-			Vector3.new(0.06, SEG_R - 0.6, 0.05),
+			sz(0.06, SEG_R - 0.6, 0.05),
 			onFace((SEG_R + 0.6) / 2, edgeDeg, -0.13),
 			BRASS,
 			METAL,
 			DETAIL
 		)
-		cyl(rotor, "Peg", 0.3, 0.12, onFace(PEG_R, edgeDeg, -0.15) * TO_Z, BRASS, METAL)
-		ball(rotor, "Stud", 0.1, onFace(PEG_R, centreDeg, -0.06), BRASS, METAL)
+		scyl(rotor, "Peg", 0.3, 0.12, onFace(PEG_R, edgeDeg, -0.15) * TO_Z, BRASS, METAL)
+		sball(rotor, "Stud", 0.1, onFace(PEG_R, centreDeg, -0.06), BRASS, METAL)
 	end
 	-- hub: brass boss, dark cap, keyhole
-	cyl(rotor, "Boss", 0.12, 1.1, h(0, 0, -0.15) * TO_Z, BRASS, METAL)
-	cyl(rotor, "BossCap", 0.06, 0.75, h(0, 0, -0.22) * TO_Z, C.darkWood, WOOD)
-	ball(rotor, "BossKey", 0.16, h(0, 0.06, -0.25), INK, Enum.Material.SmoothPlastic)
-	box(rotor, "BossKey", Vector3.new(0.07, 0.18, 0.02), h(0, -0.06, -0.26), INK, Enum.Material.SmoothPlastic, DETAIL)
+	scyl(rotor, "Boss", 0.12, 1.1, h(0, 0, -0.15) * TO_Z, BRASS, METAL)
+	scyl(rotor, "BossCap", 0.06, 0.75, h(0, 0, -0.22) * TO_Z, C.darkWood, WOOD)
+	sball(rotor, "BossKey", 0.16, h(0, 0.06, -0.25), INK, Enum.Material.SmoothPlastic)
+	box(rotor, "BossKey", sz(0.07, 0.18, 0.02), h(0, -0.06, -0.26), INK, Enum.Material.SmoothPlastic, DETAIL)
 
 	-- pointer: a door-knocker ring on the hinge with a brass arrow hanging down to the pegs
 	local pointer = Kit.folder(model, "Pointer")
@@ -584,17 +642,21 @@ local function buildWheel(parent: Instance)
 		box(pointer, "PointerHinge", Vector3.new(0.2, 0.2, 0.2), pivot, Color3.new(1, 1, 1), nil, INVISIBLE)
 	pointer.PrimaryPart = pivotPart
 	pointer.WorldPivot = pivot
-	cyl(pointer, "Knocker", 0.08, 0.42, pivot * TO_Z, BRASS, METAL)
-	cyl(pointer, "KnockerEye", 0.09, 0.22, pivot * TO_Z, INK, Enum.Material.SmoothPlastic)
-	box(pointer, "Shaft", Vector3.new(0.1, 0.45, 0.06), pivot * CFrame.new(0, -0.38, 0), BRASS, METAL, DETAIL)
-	local tipTop = (pivot * CFrame.new(0, -0.58, 0)).Position
+	scyl(pointer, "Knocker", 0.08, 0.42, pivot * TO_Z, BRASS, METAL)
+	scyl(pointer, "KnockerEye", 0.09, 0.22, pivot * TO_Z, INK, Enum.Material.SmoothPlastic)
+	box(pointer, "Shaft", sz(0.1, 0.45, 0.06), pivot * CFrame.new(0, -0.38 * S, 0), BRASS, METAL, DETAIL)
+	local tipTop = (pivot * CFrame.new(0, -0.58 * S, 0)).Position
 	local down, right = -pivot.UpVector, pivot.RightVector
 	for _, side in { 1, -1 } do
-		tri(pointer, "Arrow", tipTop, down, right * side, 0.3, 0.17, 0.06, BRASS, METAL)
+		tri(pointer, "Arrow", tipTop, down, right * side, 0.3 * S, 0.17 * S, 0.06 * S, BRASS, METAL)
 	end
-	box(pointer, "PointerTip", Vector3.new(0.05, 0.05, 0.05), pivot * CFrame.new(0, -0.86, 0), BRASS, nil, INVISIBLE)
+	local tipCF = pivot * CFrame.new(0, -0.86 * S, 0)
+	box(pointer, "PointerTip", Vector3.new(0.05, 0.05, 0.05), tipCF, BRASS, nil, INVISIBLE)
 
-	label(model, (base * CFrame.new(0, 9.8, 0.4)).Position, info.title, "spin your luck", info.color)
+	-- title just above the top beam, in front of the crest (y 13.6: a 60 px billboard stays under the
+	-- 16-stud ceiling out to its 45-stud MaxDistance and clears the pointer from the ring),
+	-- and 2.4 in front of the frame so the top beam and crest never cut into it
+	label(model, (base * CFrame.new(0, 13.6, -2.4)).Position, info.title, "spin your luck", info.color)
 	return model
 end
 
@@ -792,9 +854,11 @@ local function buildChallenges(parent: Instance)
 		)
 	end
 
+	-- over the desk, well above his name tag (head ~4.6 + 2.0, hidden past 30 studs) and the whisper
+	-- bubble (head + 2.6), so the three never stack on screen
 	label(
 		model,
-		(base * CFrame.new(0, 8.9, 0.9)).Position,
+		(base * CFrame.new(0, 10, 0)).Position,
 		info.title,
 		Rewards.ArchivistName .. " keeps the ledger",
 		info.color

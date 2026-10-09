@@ -48,26 +48,32 @@ Layout.Shopkeeper = { position = Vector3.new(-23.4, 6.1, 53.2), facing = Vector3
 
 -- Reading-hall reward stations: a glowing ring on the floor (walk onto it to open that station's UI)
 -- with its object just behind it. Kept off the stair->arch walkway, the workshop path and the desks:
---   Daily      between the two study desks, the chest backed toward the window nook, facing the walkway
---   Wheel      back-right, between the walkway and the right-hand reading table, turned toward the stair
---   Challenges front-left, the archivist's little desk in front of the long wall shelves, facing -Z
+--   Challenges the archivist's desk in the alcove between the two study desks, facing +X: the one
+--              spot on the left that the (-8, 17.5) pillar hides from neither the stair foot nor the
+--              walkway. The desk assembly (desk + card catalogue on its +Z end) spans z ~-0.25..4.4,
+--              x -19.2..-18.0; he stands 1.75 behind it, clear of the nook rug (x <= -21.15).
+--   Wheel      back-right, dead ahead from the stair, a big centrepiece turned toward its ring; its
+--              plinth stays inside the back wall (z >= -19.8) and left of the reading table (x <= 20.2)
+--   Daily      front-left pocket (in front of the window-nook armchairs, x >= -23.6), facing +X; the
+--              front study desk is shortened to clear it (Hall.luau)
 -- ring = floor centre (y = hall floor), object = floor-level CFrame whose -Z (LookVector) is the front.
+-- radius = the ring's bright rim AND the client trigger (Rewards.client: inside radius enters, +1 stays).
 Layout.Stations = {
 	Daily = {
-		ring = Vector3.new(-16.2, 0, 1.5),
-		radius = 3,
-		object = CFrame.lookAt(Vector3.new(-20, 0, 1.5), Vector3.new(-10, 0, 1.5)),
+		ring = Vector3.new(-14.5, 0, 23),
+		radius = 4.7,
+		object = CFrame.lookAt(Vector3.new(-20.8, 0, 23), Vector3.new(-14.5, 0, 23)),
 	},
 	Wheel = {
-		ring = Vector3.new(13.2, 0, -10.2),
-		radius = 3,
-		object = CFrame.lookAt(Vector3.new(14.9, 0, -13.9), Vector3.new(10.5, 0, -4.4)),
+		ring = Vector3.new(12.6, 0, -9.8),
+		radius = 4.7,
+		object = CFrame.lookAt(Vector3.new(14, 0, -16.5), Vector3.new(12.6, 0, -9.8)),
 	},
 	Challenges = {
-		ring = Vector3.new(-11, 0, 22.4),
-		radius = 2.6,
-		object = CFrame.lookAt(Vector3.new(-11, 0, 26.3), Vector3.new(-11, 0, 20)), -- the desk
-		npc = CFrame.lookAt(Vector3.new(-11, 0, 28.05), Vector3.new(-11, 0, 20)), -- stands behind it
+		ring = Vector3.new(-12, 0, 2.2),
+		radius = 4.6,
+		object = CFrame.lookAt(Vector3.new(-18.6, 0, 1.4), Vector3.new(-10, 0, 1.4)), -- the desk
+		npc = CFrame.lookAt(Vector3.new(-20.35, 0, 1.4), Vector3.new(-10, 0, 1.4)), -- stands behind it
 	},
 }
 

@@ -77,6 +77,7 @@ type RingFX = {
 	hazeSize: Vector3,
 	light: PointLight?,
 	label: BillboardGui?,
+	labelBase: Vector3,
 	phase: number,
 	pos: Vector3,
 }
@@ -89,23 +90,27 @@ local function setupRing(model: Instance, phase: number, color: Color3)
 	end
 	local haze = model:FindFirstChild("RingHaze") :: BasePart?
 	local anchor = model:FindFirstChild("LabelAnchor")
+	local label = anchor and anchor:FindFirstChild("Label") :: BillboardGui?
 	local fx: RingFX = {
 		rim = rim,
 		band = model:FindFirstChild("RingBand") :: BasePart?,
 		haze = haze,
 		hazeSize = if haze then haze.Size else Vector3.one,
 		light = rim:FindFirstChild("RingLight", true) :: PointLight?,
-		label = anchor and anchor:FindFirstChild("Label") :: BillboardGui?,
+		label = label,
+		labelBase = if label then label.StudsOffset else Vector3.zero,
 		phase = phase,
 		pos = rim.Position,
 	}
 	table.insert(rings, fx)
 
-	-- slow motes drifting up off the ring
+	-- slow motes drifting up off the ring: spread over its inner disc, the rate following its area
+	-- (2.5/s on a radius-3 ring, ~5/s on the big ones), the motes a touch larger and taller-rising
 	local radius = tonumber(model:GetAttribute("RingRadius")) or 3
+	local k = math.clamp(radius / 3, 0.6, 2)
 	local area = localPart(
 		"RingMotes",
-		Vector3.new(radius * 1.5, 0.1, radius * 1.5),
+		Vector3.new(radius * 1.4, 0.1, radius * 1.4),
 		CFrame.new(rim.Position + Vector3.new(0, 0.12, 0))
 	)
 	local motes = Instance.new("ParticleEmitter")
@@ -115,13 +120,14 @@ local function setupRing(model: Instance, phase: number, color: Color3)
 	motes.LightInfluence = 0
 	motes.Brightness = 1.6
 	motes.EmissionDirection = Enum.NormalId.Top
-	motes.Rate = 2.5
+	motes.Rate = 2.5 * k * k
 	motes.Lifetime = NumberRange.new(3, 5)
-	motes.Speed = NumberRange.new(0.3, 0.65)
+	motes.Speed = NumberRange.new(0.3, 0.65 * math.sqrt(k))
 	motes.SpreadAngle = Vector2.new(12, 12)
 	motes.Acceleration = Vector3.new(0, 0.04, 0)
 	motes.Drag = 0.3
-	motes.Size = ns({ 0, 0, 0.2, 0.12, 0.8, 0.09, 1, 0 })
+	local m = math.sqrt(k)
+	motes.Size = ns({ 0, 0, 0.2, 0.12 * m, 0.8, 0.09 * m, 1, 0 })
 	motes.Transparency = ns({ 0, 1, 0.25, 0.35, 0.75, 0.5, 1, 1 })
 	motes.Parent = area
 end
@@ -145,7 +151,7 @@ local function stepRings(t: number, camPos: Vector3)
 			r.light.Brightness = 0.3 + 0.25 * s
 		end
 		if r.label then
-			r.label.StudsOffset = Vector3.new(0, 0.08 * math.sin(t * 1.1 + r.phase), 0)
+			r.label.StudsOffset = r.labelBase + Vector3.new(0, 0.1 * math.sin(t * 1.1 + r.phase), 0)
 		end
 	end
 end
@@ -164,21 +170,24 @@ type Floater = {
 }
 local floaters: { Floater } = {}
 
-local function makeCoin(): Part
-	local p = localPart("Coin", Vector3.new(0.04, 0.26, 0.26), CFrame.new())
+local function makeCoin(scale: number): Part
+	local p = localPart("Coin", Vector3.new(0.04, 0.26, 0.26) * scale, CFrame.new())
 	p.Shape = Enum.PartType.Cylinder
 	p.Material = Enum.Material.Neon
 	p.Color = COIN
 	return p
 end
 
-local function makeKey(): Model
+local function makeKey(scale: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Key"
-	local shaft = localPart("Shaft", Vector3.new(0.42, 0.06, 0.04), CFrame.new())
-	local bit = localPart("Bit", Vector3.new(0.06, 0.14, 0.04), CFrame.new(0.18, -0.07, 0))
-	local bow =
-		localPart("Bow", Vector3.new(0.04, 0.2, 0.2), CFrame.new(-0.27, 0, 0) * CFrame.Angles(0, math.rad(90), 0))
+	local shaft = localPart("Shaft", Vector3.new(0.42, 0.06, 0.04) * scale, CFrame.new())
+	local bit = localPart("Bit", Vector3.new(0.06, 0.14, 0.04) * scale, CFrame.new(0.18 * scale, -0.07 * scale, 0))
+	local bow = localPart(
+		"Bow",
+		Vector3.new(0.04, 0.2, 0.2) * scale,
+		CFrame.new(-0.27 * scale, 0, 0) * CFrame.Angles(0, math.rad(90), 0)
+	)
 	bow.Shape = Enum.PartType.Cylinder
 	for _, p in { shaft, bit, bow } do
 		p.Material = Enum.Material.Neon
@@ -190,7 +199,8 @@ local function makeKey(): Model
 	return model
 end
 
-local function launch(obj: PVInstance, origin: Vector3, rng: Random)
+-- `scale` = the chest's size relative to its 2.2-wide design (spread and lift grow with it).
+local function launch(obj: PVInstance, origin: Vector3, rng: Random, scale: number)
 	local parts = {}
 	if obj:IsA("BasePart") then
 		table.insert(parts, obj)
@@ -204,9 +214,14 @@ local function launch(obj: PVInstance, origin: Vector3, rng: Random)
 	table.insert(floaters, {
 		obj = obj,
 		parts = parts,
-		from = CFrame.new(origin + Vector3.new(rng:NextNumber(-0.6, 0.6), 0, rng:NextNumber(-0.3, 0.3)))
-			* CFrame.Angles(0, rng:NextNumber(0, 6.28), 0),
-		vel = Vector3.new(rng:NextNumber(-0.35, 0.35), rng:NextNumber(1.4, 2.2), rng:NextNumber(-0.35, 0.35)),
+		from = CFrame.new(
+			origin + Vector3.new(rng:NextNumber(-0.6, 0.6) * scale, 0, rng:NextNumber(-0.3, 0.3) * scale)
+		) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0),
+		vel = Vector3.new(
+			rng:NextNumber(-0.35, 0.35) * scale,
+			rng:NextNumber(1.4, 2.2) * math.sqrt(scale),
+			rng:NextNumber(-0.35, 0.35) * scale
+		),
 		spin = rng:NextNumber(4, 7) * (if rng:NextNumber() < 0.5 then -1 else 1),
 		t0 = os.clock(),
 		life = rng:NextNumber(1.3, 1.9),
@@ -249,6 +264,10 @@ local function setupChest(model: Instance)
 	local light = glow and glow:FindFirstChild("GlowLight") :: PointLight?
 	local plate = (chest:FindFirstChild("LockPlate") or chest:FindFirstChild("Body") or hinge) :: BasePart
 	local OPEN = 105
+	-- the chest's size relative to its 2.2 x 1.4 design (built 1.7x): every offset/size below scales by it
+	local body = chest:FindFirstChild("Body") :: BasePart?
+	local scale = if body then math.clamp(body.Size.X / 2.2, 0.5, 3) else 1
+	local depth = if body then body.Size.Z else 1.4 * scale
 
 	local driver = Instance.new("NumberValue")
 	driver.Changed:Connect(function(v: number)
@@ -264,8 +283,9 @@ local function setupChest(model: Instance)
 	end
 
 	-- the burst: golden sparkles thrown up and out, then slower glints drifting up
-	local top = hingeCF.Position + hingeCF:VectorToWorldSpace(Vector3.new(0, 0.1, -0.7))
-	local host = localPart("ChestBurst", Vector3.new(1.4, 0.2, 0.8), hingeCF.Rotation + top)
+	-- the middle of the open chest's mouth (the hinge is on the back-top edge)
+	local top = hingeCF.Position + hingeCF:VectorToWorldSpace(Vector3.new(0, 0.1 * scale, -depth / 2))
+	local host = localPart("ChestBurst", Vector3.new(1.4, 0.2, 0.8) * scale, hingeCF.Rotation + top)
 	local sparkles = Instance.new("ParticleEmitter")
 	sparkles.Texture = TEX_SPARKLE
 	sparkles.Color = ColorSequence.new(Color3.fromRGB(255, 230, 150), GOLD)
@@ -275,21 +295,21 @@ local function setupChest(model: Instance)
 	sparkles.EmissionDirection = Enum.NormalId.Top
 	sparkles.Rate = 0
 	sparkles.Lifetime = NumberRange.new(0.7, 1.3)
-	sparkles.Speed = NumberRange.new(4, 7.5)
+	sparkles.Speed = NumberRange.new(4 * math.sqrt(scale), 7.5 * math.sqrt(scale))
 	sparkles.SpreadAngle = Vector2.new(35, 35)
 	sparkles.Acceleration = Vector3.new(0, -7, 0)
 	sparkles.Drag = 1.2
-	sparkles.Size = ns({ 0, 0.28, 1, 0 })
+	sparkles.Size = ns({ 0, 0.28 * scale, 1, 0 })
 	sparkles.Transparency = ns({ 0, 0, 0.7, 0.2, 1, 1 })
 	sparkles.RotSpeed = NumberRange.new(-180, 180)
 	sparkles.Parent = host
 	local glints = sparkles:Clone()
 	glints.Texture = TEX_MOTE
 	glints.Lifetime = NumberRange.new(1.6, 2.6)
-	glints.Speed = NumberRange.new(1, 2)
+	glints.Speed = NumberRange.new(1 * math.sqrt(scale), 2 * math.sqrt(scale))
 	glints.SpreadAngle = Vector2.new(20, 20)
 	glints.Acceleration = Vector3.new(0, 0.3, 0)
-	glints.Size = ns({ 0, 0, 0.15, 0.22, 1, 0 })
+	glints.Size = ns({ 0, 0, 0.15, 0.22 * scale, 1, 0 })
 	glints.Parent = host
 
 	local rng = Random.new()
@@ -318,10 +338,10 @@ local function setupChest(model: Instance)
 		if mine ~= token then
 			return
 		end
-		sparkles:Emit(45)
-		glints:Emit(14)
-		for i = 1, 7 do
-			launch(if i <= 2 then makeKey() else makeCoin(), top, rng)
+		sparkles:Emit(60)
+		glints:Emit(18)
+		for i = 1, 9 do
+			launch(if i <= 2 then makeKey(scale) else makeCoin(scale), top, rng, scale)
 		end
 
 		task.wait(4)

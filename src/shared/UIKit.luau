@@ -794,6 +794,22 @@ function UIKit.toggle(panel: Frame)
 	end
 end
 
+-- Opt a code-built panel (one that doesn't come from UIKit.panel, e.g. RewardsUI/Shell) into the
+-- show/hide pop and fit-to-screen scaling: gives it a UIScale named "Fit" (Scale = the current fit)
+-- that UIKit.show/hide animate and FitChanged rescales. Safe to call twice (returns the same scale).
+function UIKit.registerPanel(panel: Frame): UIScale
+	local existing = panelScales[panel]
+	if existing then
+		return existing
+	end
+	local scale = UIKit.new("UIScale", { Name = "Fit", Scale = fitScale, Parent = panel })
+	panelScales[panel] = scale
+	if panel:GetAttribute("Open") == nil then
+		panel:SetAttribute("Open", false)
+	end
+	return scale
+end
+
 fitChanged.Event:Connect(function(s)
 	for panel, scale in panelScales do
 		if panel.Parent then

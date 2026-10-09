@@ -13,8 +13,9 @@ local Rewards = require(Shared.Rewards)
 
 local ArchivistService = {}
 
--- fallback if Builders.Layout can't be read: behind the desk in the reading hall, facing -Z
-local DEFAULT_CFRAME = CFrame.lookAt(Vector3.new(-11, 0, 28.05), Vector3.new(-11, 0, 20))
+-- fallback if Builders.Layout can't be read: behind his desk in the alcove between the study desks,
+-- facing +X toward the walkway (keep in step with Layout.Stations.Challenges.npc)
+local DEFAULT_CFRAME = CFrame.lookAt(Vector3.new(-20.35, 0, 1.4), Vector3.new(-10, 0, 1.4))
 local IDLE_ANIMATION = "rbxassetid://507766666" -- default R15 idle
 local STOOP = math.rad(-9) -- forward lean at the waist: forty years over a ledger
 
@@ -306,23 +307,43 @@ local function dress(rig: Model)
 	)
 end
 
+-- Two lines over his head: "Mr. Ashby" and, smaller, "the archivist". Sized in pixels (always
+-- legible) and wide enough that TextScaled never squeezes either line; it hides past 30 studs so it
+-- never stacks under the CHALLENGES station label (y 10, over the desk) on screen. Archivist.client
+-- hides it while his whisper bubble (head + 2.6) is up.
+local TAG_WIDTH, TAG_HEIGHT = 200, 46
 local function nameTag(rig: Model)
 	local tag = Instance.new("BillboardGui")
 	tag.Name = "NameTag"
-	tag.Size = UDim2.fromOffset(260, 30)
-	tag.StudsOffset = Vector3.new(0, 2.2, 0)
-	tag.MaxDistance = 45
+	tag.Size = UDim2.fromOffset(TAG_WIDTH, TAG_HEIGHT)
+	tag.StudsOffset = Vector3.new(0, 2.0, 0)
+	tag.MaxDistance = 30
 	tag.LightInfluence = 0
 	tag.Parent = (rig :: any).Head
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.SpecialElite
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(196, 226, 226) -- the lobby's cream, gone cold
-	label.TextStrokeTransparency = 0.5
-	label.Text = "the archivist"
-	label.Parent = tag
+	local function line(name: string, text: string, y: number, h: number, font: Font, color: Color3)
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.BackgroundTransparency = 1
+		label.Position = UDim2.fromScale(0, y)
+		label.Size = UDim2.fromScale(1, h)
+		label.FontFace = font
+		label.TextScaled = true
+		label.Text = text
+		label.TextColor3 = color
+		label.TextStrokeColor3 = Color3.fromRGB(14, 20, 24)
+		label.TextStrokeTransparency = 0.45
+		label.Parent = tag
+		return label
+	end
+	line(
+		"Name",
+		Rewards.ArchivistName,
+		0,
+		0.6,
+		Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Bold),
+		Color3.fromRGB(214, 236, 236) -- the lobby's cream, gone cold
+	)
+	line("Role", "the archivist", 0.6, 0.4, Font.fromEnum(Enum.Font.SpecialElite), Color3.fromRGB(150, 206, 210))
 end
 
 function ArchivistService.build(parent: Instance, at: CFrame): Model?
