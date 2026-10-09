@@ -393,7 +393,6 @@ local function begin(pad: Instance)
 
 	local slot = player:GetAttribute("CutsceneSlot") or 1
 	local count = pad:GetAttribute("CutsceneCount") or 1
-	local mode = string.upper(tostring(pad:GetAttribute("Mode") or ""))
 
 	local function at(name: string, t: number, ct: number, fn: () -> ())
 		if ct >= t and not session.fired[name] then
