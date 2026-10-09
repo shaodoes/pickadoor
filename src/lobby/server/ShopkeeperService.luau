@@ -365,7 +365,7 @@ function ShopkeeperService.build(parent: Instance, position: Vector3?, facing: V
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ObjectText = "Teeth"
 	prompt.ActionText = "Talk"
-	prompt.MaxActivationDistance = 9
+	prompt.MaxActivationDistance = 11 -- reach him from anywhere along the front of the counter
 	prompt.RequiresLineOfSight = false
 	prompt.HoldDuration = 0
 	prompt:SetAttribute("Panel", "Shopkeeper")

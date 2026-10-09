@@ -805,7 +805,7 @@ local function buildCounter(shop: Instance)
 		EBONY,
 		Enum.Material.Wood
 	)
-	local top = box(
+	box(
 		counter,
 		"Top",
 		Vector3.new(d + 0.3, 0.26, len + 0.4),
@@ -1028,7 +1028,7 @@ local function buildCounter(shop: Instance)
 		)
 	end
 
-	Kit.prompt(top, "Gift Shop", "Browse Shop", "Shop")
+	-- no prompt on the counter: you talk to Teeth, and his "Show me." opens the shop
 
 	-- nothing stands behind the counter: that's where he is (Layout.Shopkeeper)
 	-- dust hanging in the cold light over the counter
