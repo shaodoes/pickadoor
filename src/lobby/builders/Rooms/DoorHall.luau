@@ -4,8 +4,8 @@
 	Wing A (Solo/Duo/Squad) | the stopped clock and "PICK A DOOR" | Wing B.
 
 	Instance contract (scripts depend on it): Lobby.Pads.<Wing>_<Mode> with Zone (+Counter), Exit, Sign
-	(SurfaceGui.Title/Status), Leaf (attribute Hinge), UnderGlow (Leak), FloorSpill, Fog (Fog);
-	Lobby.Queue.Stencil (SurfaceGui.Label, Glow, Drip), Lobby.Queue.Clock (Face.Glow, hands, Center).
+	(SurfaceGui.Title/Status) + Plaque (3D), Leaf (attribute Hinge), UnderGlow (Leak), FloorSpill, Fog (Fog);
+	Lobby.Queue.Stencil (SurfaceGui.Label, Glow, Drip) + StencilSign (3D), Lobby.Queue.Clock (Face.Glow, hands, Center).
 ]]
 local Builders = script.Parent.Parent
 local Kit = require(Builders.Kit)
@@ -293,7 +293,9 @@ local function buildPad(parent: Instance, queue: Instance, wing: string, mode: s
 
 	-- the label above the door: Sign.SurfaceGui.Title / Status
 	local signCf = CFrame.lookAt(Vector3.new(x, 11.9, wallZ), Vector3.new(x, 11.9, wallZ + 5))
-	if Signage and Signage.doorSign then
+	if Signage and Signage.doorPlaque then
+		Signage.doorPlaque(pad, signCf, mode, spec.capacity, spec.color)
+	elseif Signage and Signage.doorSign then
 		Signage.doorSign(pad, signCf, mode, spec.capacity)
 	else
 		local sign, gui = plainSign(pad, "Sign", signCf, 6, 2.2)
@@ -473,6 +475,12 @@ local function buildClock(queue: Instance, center: Vector3)
 end
 
 local function buildStencil(queue: Instance)
+	if Signage and Signage.heroStencil then
+		-- the hero sign: two lines between the inner plaques (x +-6.65), DOOR clear of the clock,
+		-- PICK A under the copper pipe (bottom y 16.05)
+		Signage.heroStencil(queue, Vector3.new(0, 12.23, WALL_Z), Vector3.zAxis, 12.2)
+		return
+	end
 	local cf = CFrame.lookAt(Vector3.new(0, 12.6, WALL_Z), Vector3.new(0, 12.6, WALL_Z + 5))
 		* CFrame.Angles(0, 0, math.rad(-1.5))
 	if Signage and Signage.stencil then
@@ -518,8 +526,8 @@ function DoorHall.build(root: Instance)
 		end
 	end
 
-	-- the stopped clock over an old cast-iron radiator, and the stencil above
-	buildClock(queue, Vector3.new(0, 8, WALL_Z))
+	-- the stopped clock over an old cast-iron radiator, and PICK A DOOR above
+	buildClock(queue, Vector3.new(0, 6.6, WALL_Z))
 	for i = -4, 4 do
 		box(
 			queue,

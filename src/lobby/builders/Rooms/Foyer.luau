@@ -12,6 +12,8 @@ local Clutter = require(Builders.Clutter)
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local signageModule = Builders:FindFirstChild("Signage")
 local Signage = signageModule and require(signageModule)
+local roomSignsModule = Builders:FindFirstChild("SignageRooms")
+local SignageRooms = roomSignsModule and require(roomSignsModule)
 
 local C = Kit.C
 local box = Kit.box
@@ -318,6 +320,11 @@ local function leaderboard(root: Instance)
 		spot.Color = C.warm
 		spot.Parent = hood
 	end
+	-- carved header with brass letters, between the lamp hoods (z 48.7..53.3) and under the downstand
+	-- beam (bottom y 18.6) and the wall cornice (y ~18.7 at the wall)
+	if SignageRooms then
+		SignageRooms.recordsHeader(board, Vector3.new(x, Y + 12.05, z), -Vector3.xAxis)
+	end
 
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SurfaceGui"
@@ -483,8 +490,10 @@ function Foyer.build(root: Instance)
 	Kit.prop(model, "PalmVase", CFrame.new(-0.2, Y, 64.6), 0.85)
 	Kit.prop(model, "Fern", CFrame.new(28.6, Y, 43.6), 1.1)
 
-	-- room sign over the stair opening, on the foyer side
-	if Signage and Signage.wallSign then
+	-- room sign over the stair opening, on the foyer side: a theatre-marquee lightbox
+	if SignageRooms then
+		SignageRooms.readingRoom(model, Vector3.new(12, Y + 11.5, ROOM.z0), Vector3.zAxis)
+	elseif Signage and Signage.wallSign then
 		Signage.wallSign(
 			model,
 			CFrame.lookAt(Vector3.new(12, Y + 11.8, ROOM.z0 + 0.06), Vector3.new(12, Y + 11.8, ROOM.z0 + 5)),

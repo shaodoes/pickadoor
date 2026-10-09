@@ -1467,9 +1467,21 @@ local function buildLanternWall(shop: Instance)
 	-- gilt "LANTERNS" board above, with a picture light, all hung on the wallpaper
 	local wx = x0 + WALL_OUT
 	local boardY = cubbyY + cubbyH + 1.2
-	local board =
-		box(wall, "Board", Vector3.new(0.15, 1.1, 6.4), Vector3.new(wx + 0.075, boardY, zc), BLACK, Enum.Material.Wood)
-	printText(board, Enum.NormalId.Right, { { "LANTERNS", Enum.Font.Bodoni, GOLD, 0.08, 0.92 } }, nil, 60)
+	local roomSigns = script.Parent.Parent:FindFirstChild("SignageRooms")
+	if roomSigns then
+		-- black lacquer with raised gold letters (3D, with a faint violet rim; SignFX glints them)
+		require(roomSigns).shopLanterns(wall, Vector3.new(wx, boardY, zc), Vector3.xAxis)
+	else
+		local board = box(
+			wall,
+			"Board",
+			Vector3.new(0.15, 1.1, 6.4),
+			Vector3.new(wx + 0.075, boardY, zc),
+			BLACK,
+			Enum.Material.Wood
+		)
+		printText(board, Enum.NormalId.Right, { { "LANTERNS", Enum.Font.Bodoni, GOLD, 0.08, 0.92 } }, nil, 60)
+	end
 	box(
 		wall,
 		"PictureLightArm",

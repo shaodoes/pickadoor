@@ -4,7 +4,9 @@
 --   plaques   titles above the doors glitch to other words (their shadow layer jumps with them);
 --             the count and its black strip pulse red in the last seconds
 --   PICK A DOOR breathes a red glow (light + overspray halo), drips, and occasionally says something
---             else; every paint layer jumps off-register together
+--             else; every paint layer jumps off-register together. With the 3D sign (Queue.StencilSign)
+--             the letters themselves are SignFX's: this script writes Tension / Blink on the sign and
+--             Plaque models, and its glitch words show through the ghost labels
 -- Optional decoration from Signage is found by attribute: GUI children tagged SignLayer move/retext
 -- with the main label, SignHalo ones breathe. Anything missing is simply skipped.
 --   clock     the second hand ticks and slips back; while any pad counts down the hands run backwards
@@ -198,6 +200,8 @@ for _, pad in pads:GetChildren() do
 		counter = pad:WaitForChild("Zone"):WaitForChild("Counter"),
 		shownCount = -1,
 		glitches = LABEL_GLITCHES[mode] or { "?" },
+		plaque = pad:FindFirstChild("Plaque"), -- the 3D plaque (SignFX reads the Tension we write on it)
+		shownTension = -1,
 		nextGlitch = os.clock() + 3 + math.random() * 10,
 		open = 0,
 		lastAngle = 0,
@@ -336,6 +340,10 @@ local function updateDoor(d, t: number, dt: number): number
 		glitch(d.title, d.glitches, d.titleText, d.titlePos, d.titleLayers)
 		d.nextGlitch = t + (5 + math.random() * 14) / (1 + tension * 3)
 	end
+	if d.plaque and math.abs(tension - d.shownTension) > 0.02 then
+		d.shownTension = tension
+		d.plaque:SetAttribute("Tension", tension)
+	end
 	return tension
 end
 
@@ -349,6 +357,10 @@ local stencilDrip = stencil:WaitForChild("Drip")
 local stencilText, stencilPos = stencilLabel.Text, stencilLabel.Position
 local stencilBaseColor = stencilLabel.TextColor3
 local stencilLayers = layersOf(stencilLabel)
+-- the 3D PICK A DOOR (Signage.heroStencil): its letters are animated by SignFX from the Tension and
+-- Blink we write on it here, and the label is only the ghost that flashes up the glitch words
+local heroSign = queue:FindFirstChild("StencilSign")
+local heroTension = -1
 local nextStencilGlitch = os.clock() + 6
 
 -- overspray halo layers breathe with the glow (updated at ~15 Hz: plenty for a slow pulse)
@@ -366,6 +378,10 @@ local function updateStencil(t: number, tension: number)
 	stencilGlow.Brightness = 0.15 + pulse * 0.3 + tension * 0.8
 	stencilLabel.TextColor3 = stencilBaseColor:Lerp(HOT_RED, pulse * 0.35 + tension * 0.5)
 	stencilDrip.Rate = 1.2 + tension * 6
+	if heroSign and math.abs(tension - heroTension) > 0.02 then
+		heroTension = tension
+		heroSign:SetAttribute("Tension", tension)
+	end
 	if t >= nextHaloUpdate and #halos > 0 then
 		nextHaloUpdate = t + 1 / 15
 		-- denser mist at the peak of each breath and as the countdown runs out
@@ -375,7 +391,10 @@ local function updateStencil(t: number, tension: number)
 		end
 	end
 	if t >= nextStencilGlitch then
-		if math.random() < 0.3 then
+		if heroSign and math.random() < 0.3 then
+			-- the letters drop out for a beat (SignFX)
+			heroSign:SetAttribute("Blink", t)
+		elseif math.random() < 0.3 then
 			-- a quick flicker instead of different words
 			stencilLabel.TextTransparency = 0.7
 			task.delay(0.06, function()

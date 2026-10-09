@@ -31,6 +31,8 @@ local Builders = script.Parent.Parent
 local Kit = require(Builders.Kit)
 local Layout = require(Builders.Layout)
 local Rewards = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Rewards"))
+local roomSignsModule = Builders:FindFirstChild("SignageRooms")
+local SignageRooms = roomSignsModule and require(roomSignsModule)
 
 local C = Kit.C
 local box = Kit.box
@@ -188,7 +190,10 @@ local function ring(model: Model, centre: Vector3, radius: number, color: Color3
 end
 
 -- Floating title + subtitle in the lobby's name-tag style (cream, stroked, unlit, short range).
-local function label(model: Model, pos: Vector3, title: string, subtitle: string, color: Color3)
+-- With SignageRooms the title becomes floating holographic 3D letters ("Title3D", facing `facing`)
+-- and the billboard keeps only its rule and subtitle, nudged down under them (the Title label stays,
+-- invisible, for the scripts that look it up).
+local function label(model: Model, pos: Vector3, title: string, subtitle: string, color: Color3, facing: Vector3)
 	local anchor = box(model, "LabelAnchor", Vector3.new(0.4, 0.4, 0.4), pos, Color3.new(1, 1, 1), nil, INVISIBLE)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Label"
@@ -231,6 +236,14 @@ local function label(model: Model, pos: Vector3, title: string, subtitle: string
 	sub.TextStrokeColor3 = INK
 	sub.TextStrokeTransparency = 0.5
 	sub.Parent = gui
+
+	if SignageRooms then
+		local flat = Vector3.new(facing.X, 0, facing.Z)
+		SignageRooms.holoTitle(model, pos + Vector3.new(0, 0.25, 0), flat.Unit, title, color)
+		head.TextTransparency = 1
+		head.TextStrokeTransparency = 1
+		gui.StudsOffset = Vector3.new(0, -0.9, 0)
+	end
 	return anchor
 end
 
@@ -439,7 +452,9 @@ local function buildDaily(parent: Instance)
 	ring(model, spec.ring, spec.radius, info.color, yaw)
 	buildChest(model, base)
 	-- over the chest (lid top ~3.2): high enough to clear the lid swinging open and the coins rising
-	label(model, (base * CFrame.new(0, 5.6, 0)).Position, info.title, "free every day", info.color)
+	-- the 3D title turns toward a point between the ring and the stair foot, so it reads from the stair
+	local labelPos = (base * CFrame.new(0, 5.6, 0)).Position
+	label(model, labelPos, info.title, "free every day", info.color, Vector3.new(6, labelPos.Y, 24) - labelPos)
 	return model
 end
 
@@ -656,7 +671,7 @@ local function buildWheel(parent: Instance)
 	-- title just above the top beam, in front of the crest (y 13.6: a 60 px billboard stays under the
 	-- 16-stud ceiling out to its 45-stud MaxDistance and clears the pointer from the ring),
 	-- and 2.4 in front of the frame so the top beam and crest never cut into it
-	label(model, (base * CFrame.new(0, 13.6, -2.4)).Position, info.title, "spin your luck", info.color)
+	label(model, (base * CFrame.new(0, 13.6, -2.4)).Position, info.title, "spin your luck", info.color, base.LookVector)
 	return model
 end
 
@@ -861,7 +876,8 @@ local function buildChallenges(parent: Instance)
 		(base * CFrame.new(0, 10, 0)).Position,
 		info.title,
 		Rewards.ArchivistName .. " keeps the ledger",
-		info.color
+		info.color,
+		base.LookVector
 	)
 	return model
 end

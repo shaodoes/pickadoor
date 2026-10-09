@@ -1643,17 +1643,27 @@ local function buildBench(model: Instance)
 		)
 	end
 
-	-- painted sign above
-	local sign = box(
-		bench,
-		"Sign",
-		Vector3.new(6.2, 1.25, 0.18),
-		CFrame.new(BX, pb1 + 1.1, BACK - 0.12) * CFrame.Angles(0, 0, math.rad(-1.5)),
-		Color3.fromRGB(44, 64, 52),
-		WOOD,
-		DETAIL
-	)
-	Kit.surfaceText(sign, Enum.NormalId.Front, "LANTERNS", Enum.Font.SpecialElite, Color3.fromRGB(226, 212, 176))
+	-- painted sign above (3D lettering from SignageRooms when it's there)
+	local roomSigns = script.Parent.Parent:FindFirstChild("SignageRooms")
+	if roomSigns then
+		-- the board's back on the lining, facing into the room (-Z), with the same slight tilt
+		require(roomSigns).benchLanterns(
+			bench,
+			CFrame.lookAt(Vector3.new(BX, pb1 + 1.1, BACK - 0.03), Vector3.new(BX, pb1 + 1.1, BACK - 5))
+				* CFrame.Angles(0, 0, math.rad(1.5))
+		)
+	else
+		local sign = box(
+			bench,
+			"Sign",
+			Vector3.new(6.2, 1.25, 0.18),
+			CFrame.new(BX, pb1 + 1.1, BACK - 0.12) * CFrame.Angles(0, 0, math.rad(-1.5)),
+			Color3.fromRGB(44, 64, 52),
+			WOOD,
+			DETAIL
+		)
+		Kit.surfaceText(sign, Enum.NormalId.Front, "LANTERNS", Enum.Font.SpecialElite, Color3.fromRGB(226, 212, 176))
+	end
 
 	-- enamel shade lamp over the bench (one of the room's three shadow-casting lights)
 	Kit.bareBulb(bench, Vector3.new(BX, FLOOR + 7.6, BACK - 2.2), 16, 1.5, true, "shade", CEIL)
@@ -2030,24 +2040,32 @@ local function buildStorage(model: Instance)
 	hangLantern(store, "copper", BEAM_XS[1], SZC - 3, CEIL - BEAM_H - 1.4, 1.0, 22, true)
 	hangLantern(store, "iron", BEAM_XS[2], -4.5, CEIL - BEAM_H - 3.2, 0.9, 16, false)
 
-	-- a sign hanging from the far beam, facing the doorway
+	-- a sign hanging from the far beam, facing the doorway (a carved 3D plank that swings a little
+	-- on its chains when SignageRooms is there; a flat painted board otherwise)
 	local signY = CEIL - BEAM_H - 1.8
-	local sign = box(
-		store,
-		"WorkshopSign",
-		Vector3.new(0.2, 1.3, 5.2),
-		Vector3.new(BEAM_XS[2] - 0.6, signY, SZC),
-		Color3.fromRGB(200, 184, 150),
-		WOOD,
-		DETAIL
-	)
-	Kit.surfaceText(sign, Enum.NormalId.Left, "WORKSHOP", Enum.Font.SpecialElite, Color3.fromRGB(90, 30, 24))
-	for _, dz in { -2, 2 } do
-		chain(
+	local signX = BEAM_XS[2] - 0.6
+	local roomSigns = script.Parent.Parent:FindFirstChild("SignageRooms")
+	if roomSigns then
+		local hanging =
+			require(roomSigns).workshopHanging(store, Vector3.new(signX, signY + 0.65, SZC), -Vector3.xAxis, 5.2, 1.3)
+		for _, dz in { -2, 2 } do
+			chain(hanging, Vector3.new(signX, CEIL - BEAM_H, SZC + dz), Vector3.new(signX, signY + 0.85, SZC + dz))
+		end
+		hanging:SetAttribute("SwayPivot", CFrame.new(signX, CEIL - BEAM_H, SZC))
+	else
+		local sign = box(
 			store,
-			Vector3.new(BEAM_XS[2] - 0.6, CEIL - BEAM_H, SZC + dz),
-			Vector3.new(BEAM_XS[2] - 0.6, signY + 0.65, SZC + dz)
+			"WorkshopSign",
+			Vector3.new(0.2, 1.3, 5.2),
+			Vector3.new(signX, signY, SZC),
+			Color3.fromRGB(200, 184, 150),
+			WOOD,
+			DETAIL
 		)
+		Kit.surfaceText(sign, Enum.NormalId.Left, "WORKSHOP", Enum.Font.SpecialElite, Color3.fromRGB(90, 30, 24))
+		for _, dz in { -2, 2 } do
+			chain(store, Vector3.new(signX, CEIL - BEAM_H, SZC + dz), Vector3.new(signX, signY + 0.65, SZC + dz))
+		end
 	end
 
 	-- drip by the boiler, puddle beneath

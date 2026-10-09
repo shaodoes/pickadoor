@@ -12,6 +12,8 @@ local Furniture = require(Builders.Furniture)
 local Clutter = require(Builders.Clutter)
 local signageModule = Builders:FindFirstChild("Signage")
 local Signage = signageModule and require(signageModule)
+local roomSignsModule = Builders:FindFirstChild("SignageRooms")
+local SignageRooms = roomSignsModule and require(roomSignsModule)
 
 local box = Kit.box
 
@@ -149,7 +151,13 @@ function Hall.build(root: Instance)
 	end
 
 	-- signs: over the arch to the doors, and by the workshop doorway
-	if Signage and Signage.wallSign then
+	if SignageRooms then
+		local arch = Layout.Openings.Arch
+		-- (the 45-degree cornice reaches down to y ~14.7 at the wall: the panel stays under it)
+		SignageRooms.theDoors(model, Vector3.new(0, arch.y1 + 0.9, ROOM.z0), Vector3.zAxis)
+		local wd = Layout.Openings.WorkshopDoor
+		SignageRooms.workshopBoard(model, Vector3.new(ROOM.x1, wd.y1 + 1.6, (wd.z0 + wd.z1) / 2), -Vector3.xAxis)
+	elseif Signage and Signage.wallSign then
 		local arch = Layout.Openings.Arch
 		Signage.wallSign(
 			model,
