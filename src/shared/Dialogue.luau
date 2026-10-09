@@ -33,6 +33,7 @@ export type Choice = {
 export type Node = {
 	text: string | (ctx: any) -> string,
 	speaker: string?, -- overrides the tree's speaker for this node
+	voice: Sfx.Voice?, -- overrides the tree's voice for this node
 	next: string?, -- linear continuation (NEXT button); nil + no choices = CLOSE ends it
 	choices: { Choice }?, -- buttons; a choice with no `next` closes the box after its `action`
 	action: string?, -- fired through opts.onAction when the node is shown
@@ -40,6 +41,7 @@ export type Node = {
 export type Tree = {
 	speaker: string,
 	accent: Color3?,
+	voice: Sfx.Voice?, -- per-syllable vocal sounds while the text types (nil = the typewriter key)
 	start: string | (ctx: any) -> string,
 	nodes: { [string]: Node },
 }
@@ -136,6 +138,7 @@ local state = {
 	choiceButtons = {} :: { TextButton },
 	choicesShown = false,
 	typing = false,
+	voice = nil :: Sfx.Voice?, -- the current line's voice; nil = typewriter clicks
 	typeToken = 0,
 	onTyped = nil :: (() -> ())?,
 	chainIndex = {} :: { [string]: number }, -- node id -> pip index for linear runs
@@ -161,6 +164,12 @@ end
 local function play(name: string, jitter: number?)
 	if not state.silent then
 		Sfx.play(name, jitter)
+	end
+end
+
+local function speak(voice: Sfx.Voice)
+	if not state.silent then
+		Sfx.speak(voice)
 	end
 end
 
@@ -539,8 +548,11 @@ local function typeLine(text: string, onDone: (() -> ())?)
 	end
 	u.body.MaxVisibleGraphemes = 0
 	state.typing = true
+	local voice = state.voice
 	task.spawn(function()
 		local shown = 0
+		local letters = 0 -- letters since the last syllable; 0 = at the start of a word
+		local lastSyllable = -math.huge
 		for first, last in utf8.graphemes(text) do
 			if token ~= state.typeToken then
 				return
@@ -548,7 +560,25 @@ local function typeLine(text: string, onDone: (() -> ())?)
 			shown += 1
 			u.body.MaxVisibleGraphemes = shown
 			local ch = text:sub(first, last)
-			if shown % 3 == 1 and ch ~= " " then
+			if voice then
+				-- a syllable at the start of each word and every few letters in it; spaces and
+				-- punctuation are silent
+				if ch:match("^[%w']") then
+					local now = os.clock()
+					if
+						(letters == 0 or letters >= (voice.every or 3))
+						and now - lastSyllable >= (voice.gap or 0.08)
+					then
+						speak(voice)
+						lastSyllable = now
+						letters = 1
+					else
+						letters += 1
+					end
+				else
+					letters = 0
+				end
+			elseif shown % 3 == 1 and ch ~= " " then
 				play("Type", 0.15)
 			end
 			-- linger on punctuation like someone thinking
@@ -727,6 +757,7 @@ function showNode(id: string)
 	local ctx = state.ctx
 	local text = resolveText(node.text, ctx)
 	u.tab.Text = node.speaker or tree.speaker
+	state.voice = node.voice or tree.voice
 
 	local visible = {}
 	for _, choice in node.choices or {} do
@@ -933,6 +964,7 @@ function Dialogue.say(speaker: string, text: string, accent: Color3?, hold: numb
 	buildPips(0)
 	applyAccent(color)
 	u.tab.Text = speaker
+	state.voice = nil
 	setLayout("say", text, 0)
 	if not wasOpen then
 		openBox()

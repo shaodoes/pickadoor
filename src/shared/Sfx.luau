@@ -1,8 +1,10 @@
 -- Client-side sound effects, all defined in Config.Sounds.
 --   Sfx.play(name)            UI sounds: non-positional, played through SoundService
 --   Sfx.make / at / loop      world sounds: positional, emitted from a part, attachment or point
+--   Sfx.speak(voice)          one syllable of a character's dialogue voice (see Voice below)
 -- World sounds are routed through two SoundGroups (Ambience, World) so they can be balanced or muted as a whole.
 local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(script.Parent.Config)
 
@@ -16,6 +18,18 @@ export type SoundOpts = {
 	far: number?, -- RollOffMaxDistance
 	looped: boolean?,
 	id: number?, -- play this specific id instead of the entry's (or a random alt)
+}
+
+-- A character's dialogue voice: short vocal clips played one syllable at a time while their line types.
+export type Voice = {
+	sounds: { string }, -- Config.Sounds names, picked at random (never the same one twice running)
+	every: number?, -- a syllable every N letters (plus one at the start of each word); default 3
+	gap: number?, -- minimum seconds between syllables; default 0.08
+	speed: number?, -- base PlaybackSpeed (pitch); default 1
+	jitter: number?, -- random +/- PlaybackSpeed variation; default 0.06
+	length: number?, -- seconds of clip per syllable; longer clips play a random slice, then fade
+	eq: { low: number, mid: number, high: number }?, -- EqualizerSoundEffect gains in dB (negative high = muffled)
+	reverb: number?, -- ReverbSoundEffect WetLevel in dB (nil = dry)
 }
 
 local sounds: { [string]: Sound } = {}
@@ -47,6 +61,121 @@ function Sfx.play(name: string, pitchJitter: number?)
 	local jitter = pitchJitter or 0.06
 	sound.PlaybackSpeed = 1 + (math.random() * 2 - 1) * jitter
 	SoundService:PlayLocalSound(sound)
+end
+
+-- One voice channel per Voice table: its own Sound per clip (with the voice's effects), at most
+-- one syllable sounding at a time - the next one fades the previous out instead of stacking on it.
+type Channel = {
+	sounds: { Sound },
+	base: { number },
+	fades: { [Sound]: Tween },
+	last: number,
+	current: Sound?,
+	token: number,
+}
+local channels: { [Voice]: Channel } = {}
+local VOICE_FADE = TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function channelFor(voice: Voice): Channel
+	local channel = channels[voice]
+	if channel then
+		return channel
+	end
+	channel = { sounds = {}, base = {}, fades = {}, last = 0, current = nil, token = 0 }
+	for _, name in voice.sounds do
+		local def = Config.Sounds[name]
+		if def and def.id ~= 0 then
+			local sound = Instance.new("Sound")
+			sound.Name = "Voice_" .. name
+			sound.SoundId = "rbxassetid://" .. def.id
+			sound.Volume = def.volume
+			if voice.eq then
+				local eq = Instance.new("EqualizerSoundEffect")
+				eq.LowGain = voice.eq.low
+				eq.MidGain = voice.eq.mid
+				eq.HighGain = voice.eq.high
+				eq.Priority = 1
+				eq.Parent = sound
+			end
+			if voice.reverb then
+				local reverb = Instance.new("ReverbSoundEffect")
+				reverb.DecayTime = 0.6
+				reverb.Density = 1
+				reverb.Diffusion = 1
+				reverb.DryLevel = 0
+				reverb.WetLevel = voice.reverb
+				reverb.Priority = 0
+				reverb.Parent = sound
+			end
+			sound.Parent = SoundService
+			table.insert(channel.sounds, sound)
+			table.insert(channel.base, def.volume)
+		end
+	end
+	channels[voice] = channel
+	return channel
+end
+
+local function fadeOut(channel: Channel, sound: Sound)
+	local fade = TweenService:Create(sound, VOICE_FADE, { Volume = 0 })
+	channel.fades[sound] = fade
+	fade.Completed:Once(function(playbackState)
+		if playbackState == Enum.PlaybackState.Completed and channel.fades[sound] == fade then
+			channel.fades[sound] = nil
+			sound:Stop()
+		end
+	end)
+	fade:Play()
+end
+
+-- Play one syllable of `voice`. Pitched by voice.speed +/- jitter; clips longer than voice.length
+-- play a random slice of themselves, so a few mumbled phrases make many different syllables.
+function Sfx.speak(voice: Voice)
+	local channel = channelFor(voice)
+	local count = #channel.sounds
+	if count == 0 then
+		return
+	end
+	local i = math.random(count)
+	if count > 1 and i == channel.last then
+		i = i % count + 1
+	end
+	channel.last = i
+	local sound = channel.sounds[i]
+	local previous = channel.current
+	if previous and previous ~= sound and previous.IsPlaying then
+		fadeOut(channel, previous)
+	end
+	local pending = channel.fades[sound]
+	if pending then
+		channel.fades[sound] = nil
+		pending:Cancel()
+	end
+
+	local jitter = voice.jitter or 0.06
+	local speed = (voice.speed or 1) * (1 + (math.random() * 2 - 1) * jitter)
+	sound.PlaybackSpeed = speed
+	sound.Volume = channel.base[i]
+	local length = voice.length
+	local start = 0
+	if length and sound.TimeLength > 0 then
+		local span = length * speed -- seconds of clip heard in `length` seconds of real time
+		if sound.TimeLength > span then
+			start = math.random() * (sound.TimeLength - span)
+		end
+	end
+	sound.TimePosition = start
+	sound:Play()
+	channel.current = sound
+	channel.token += 1
+	if length then
+		local token = channel.token
+		task.delay(length, function()
+			if channel.token == token and sound.IsPlaying then
+				fadeOut(channel, sound)
+			end
+		end)
+	end
 end
 
 -- Preload the UI sounds (world sounds load when the lobby creates them).

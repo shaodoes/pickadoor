@@ -108,6 +108,12 @@ Config.Sounds = {
 	Purchase = { id = 100813529228543, volume = 0.5 },
 	Type = { id = 9120300134, volume = 0.18 }, -- typewriter key, used for the guide's dialogue
 	Knock = { id = 9120918417, volume = 0.5 },
+	-- Teeth's dialogue voice (DialogueTrees.Shopkeeper.voice): wet, guttural mumbled-nonsense vocals
+	-- (Pro Sound Effects "Robot Vocal" creature-dialogue clips), sliced into syllables and pitched down
+	TeethVoice1 = { id = 9118546600, volume = 0.35 }, -- Wet Slobbery Mumbled Nonsense, 0.39 s
+	TeethVoice2 = { id = 9118546108, volume = 0.35 }, -- Wet Slobbery Mumbled Nonsense, 0.57 s
+	TeethVoice3 = { id = 9118546107, volume = 0.35 }, -- Wet Slobbery Mumbled Nonsense, 0.30 s
+	TeethVoice4 = { id = 9118480075, volume = 0.3 }, -- Deep Mumbled Nonsense 3 (guttural, groaning), 0.52 s
 
 	-- Room tone beds (2D, crossfaded by AmbientSound by the room the camera is in)
 	AmbLibrary = { id = 9125446564, volume = 0.16, speed = 0.9, looped = true, group = "Ambience", world = true }, -- deep AC room tone, 34.6 s

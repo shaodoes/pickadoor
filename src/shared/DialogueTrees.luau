@@ -63,6 +63,17 @@ end
 DialogueTrees.Shopkeeper = {
 	speaker = "TEETH",
 	accent = Color3.fromRGB(96, 40, 150),
+	-- low, wet, throaty syllables instead of the typewriter clicks: pitched down, muffled, a little room
+	voice = {
+		sounds = { "TeethVoice1", "TeethVoice2", "TeethVoice3", "TeethVoice4" },
+		every = 3,
+		gap = 0.09,
+		speed = 0.7,
+		jitter = 0.08,
+		length = 0.16,
+		eq = { low = 3, mid = -2, high = -18 },
+		reverb = -14,
+	},
 	start = function(ctx)
 		if ctx.lasered then
 			return "lasered"
