@@ -34,6 +34,36 @@ Config.Rewards = {
 	Blessing = 40, -- good door
 	Hunt = 100, -- survived a bad door
 }
+-- [trial config] door-room flow tuning (safe side / threat side durations etc.)
+Config.DoorRoomFlow = {
+	pickTime = Config.DoorPickTime, -- PICK A DOOR countdown; each player's door is the Zone they stand in at zero
+	revealTime = 4, -- doors swing open, "THE RIGHT DOOR WAS ..." before the round starts
+	roundLength = 60, -- stub; real trials run 10-15 min (Config.TrialDuration) once the maps exist
+	rewardTime = 4, -- the tally on screen before the return countdown
+	returnTime = 5,
+}
+-- The Follower (threat corridor stalker): see src/trial/server/Stalker.luau
+Config.Stalker = {
+	walkSpeed = 11,
+	aggroRange = 60, -- studs; it idles at the far end until someone comes this close
+	damage = 34, -- per touch: three touches and you're done
+	hitCooldown = 1.5, -- seconds per player between touches
+	hitRange = 3, -- a pass this close counts as a touch (Touched misses at walking speed)
+	retarget = 0.5, -- seconds between target updates
+}
+
+-- [items config] item tuning that isn't per-item (battery recharge rates etc.)
+Config.Items = {
+	LaserBatteryMax = 100,
+	LaserDrainSeconds = 12, -- a full battery lasts this long of continuous firing
+	LaserRechargeSeconds = 90, -- empty -> full while idle in the lobby (the trial passes recharge = false)
+	LaserRange = 80, -- studs
+	LaserAimCone = 60, -- degrees off the lens forward / the character's facing that the aim may deviate
+	LaserStunHold = 0.5, -- seconds of continuous beam on an Entity before it is stunned
+	LaserStunDuration = 4,
+	LockHoldSeconds = 2.5, -- ProximityPrompt hold to pick a lock
+	LockRelockSeconds = 20, -- a picked chest closes and locks again after this long
+}
 
 -- The pool of fates behind the doors. Each trial map will register itself here later.
 Config.Fates = {
@@ -166,6 +196,153 @@ Config.Sounds = {
 
 	-- Local character footsteps on the lobby's tile floor (replaces the default Running sound; set to nil to keep it)
 	FootstepTile = { id = 89709498928615, volume = 0.45, world = true }, -- marble/tile footsteps loop, 3.3 s
+
+	-- [music] lobby music loop + the shop's darker drone (ids are meant to be swapped freely)
+	-- "Remembering You (c)" by Laura Rossi (APM Music / KPM, Creator Store): sparse, melancholic solo piano, 131 s.
+	-- Replace `id` with any other track; AmbientSound ducks it per room (quietest inside the shop).
+	LobbyMusic = { id = 9043586747, volume = 0.2, looped = true, group = "Music", world = true },
+	-- Pro Sound Effects "Eerie Tone, Metallic Swirling Tone, Tubular" 83.7 s: hangs around the shopkeeper
+	ShopDrone = {
+		id = 9114228148,
+		volume = 0.4,
+		speed = 0.9,
+		looped = true,
+		near = 7,
+		far = 34,
+		group = "Ambience",
+		world = true,
+	},
+	-- [items] item use / laser / lockpick sounds
+	PillSwallow = {
+		id = 102367379211988,
+		alt = { 133988388434763 },
+		volume = 0.6,
+		near = 4,
+		far = 30,
+		group = "World",
+		world = true,
+	}, -- gulp 0.9 s / 1.2 s
+	BandageWrap = {
+		id = 131079594340516,
+		alt = { 9120205039 },
+		volume = 0.5,
+		near = 4,
+		far = 30,
+		group = "World",
+		world = true,
+	}, -- bandage wrapping 2.5 s, towel/cloth rustle 3.9 s
+	LockpickClick = {
+		id = 9116784575,
+		volume = 0.45,
+		speed = 0.9,
+		looped = true,
+		near = 3,
+		far = 25,
+		group = "World",
+		world = true,
+	}, -- small ratchet clicks, 5.4 s
+	LockOpen = {
+		id = 9117185722,
+		alt = { 9117185720 },
+		volume = 0.6,
+		near = 5,
+		far = 40,
+		group = "World",
+		world = true,
+	}, -- padlock opens 1.7 s / 3.2 s
+	LaserHum = {
+		id = 9119806465,
+		volume = 0.28,
+		speed = 1.6,
+		looped = true,
+		near = 4,
+		far = 35,
+		group = "World",
+		world = true,
+	}, -- buzzy phasey synth drone pitched up, 36 s
+	LaserHiss = {
+		id = 9114277757,
+		alt = { 9114277402, 9114277338 },
+		volume = 0.5,
+		near = 5,
+		far = 45,
+		group = "World",
+		world = true,
+	}, -- electric zaps 1.0 s / 2.1 s / 2.0 s
+	Stun = {
+		id = 18939003571,
+		alt = { 139239108826837 },
+		volume = 0.5,
+		near = 6,
+		far = 60,
+		group = "World",
+		world = true,
+	}, -- short ear ringing 2.8 s / 3.4 s
+	-- [shopkeeper] the shopkeeper's hiss and tics
+	ShopkeeperHiss = {
+		id = 9113991846, -- creature snarl / hiss exhale, 2.5 s
+		alt = { 9113989919, 9125475724 }, -- hiss exhale 1.1 s, growl-hiss-snarl 2.3 s
+		volume = 0.55,
+		near = 6,
+		far = 40,
+		group = "World",
+		world = true,
+	},
+	ShopkeeperTic = { -- the grin tic: a quiet wet click of the tongue / teeth
+		id = 9126135650, -- tongue click with saliva, 0.5 s
+		alt = { 9126163553, 9126135424 }, -- throat suction with lip plop 0.4 s, tongue click 0.6 s
+		volume = 0.25,
+		near = 4,
+		far = 24,
+		group = "World",
+		world = true,
+	},
+	-- [lantern] lantern equip / flame sounds
+	LanternEquip = {
+		id = 103911273184692, -- fire ignite, 1.9 s
+		alt = { 7278182233 }, -- fire ignite (second take), 2.0 s
+		volume = 0.4,
+		near = 3,
+		far = 30,
+		group = "World",
+		world = true,
+	},
+	LanternFlame = {
+		id = 9112780438,
+		volume = 0.07,
+		speed = 1.15,
+		looped = true,
+		near = 3,
+		far = 14,
+		group = "World",
+		world = true,
+	}, -- fireplace crackle loop pitched up to a small flame, 36 s
+	-- [trial] door room: chime, countdown ticks, voice line hook
+	PickChime = { id = 9114352428, volume = 0.6 }, -- evil church bell, twisted and slowed, 8.2 s: the doors are ready
+	PickTick = { id = 9120917861, volume = 0.5 }, -- soft temple-block clunk, 0.5 s: one per second of the countdown
+	PickTickHot = { id = 9119976314, volume = 0.65 }, -- dull clunky block strike, 0.75 s: the last three seconds (played lower)
+	-- voice line "PICK A DOOR" (asset id supplied by the user; 0 = not set, the chime + text stand in)
+	PickADoorVoice = { id = 0, volume = 1 },
+	StalkerHit = {
+		id = 9113525391, -- body slam against a car door, 1.55 s
+		alt = { 9113525643 },
+		volume = 0.8,
+		speed = 0.8,
+		near = 6,
+		far = 70,
+		group = "World",
+		world = true,
+	},
+	DoorSwing = {
+		id = 9120839552, -- long wooden door creak + squeak, 4.2 s: the leaves swinging open
+		alt = { 9114135682 }, -- door creak open and close, 2.3 s
+		volume = 0.7,
+		speed = 0.85,
+		near = 8,
+		far = 90,
+		group = "World",
+		world = true,
+	},
 }
 
 return Config

@@ -116,6 +116,7 @@ function LobbyBuilder.build()
 			room.build(root)
 		end
 	end
+	require(Builders.Locks).build(root) -- the lockpick demo chest (Workshop)
 	-- keep the vaults out of the stairwell shaft that rises above the foyer
 	Natatorium.build(root, { { hs.x0 - 2, hs.x1 + 2, hs.z0 - 2, hs.z1 + 2 } })
 	root.Parent = workspace

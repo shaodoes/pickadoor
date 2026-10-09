@@ -41,6 +41,10 @@ Layout.Openings = {
 
 Layout.Spawn = CFrame.new(12, 6.1, 51) -- faces -Z, straight down the grand stair
 Layout.Guide = { position = Vector3.new(4.5, 6, 45.5), facing = Vector3.new(12, 6, 51) }
+-- The shopkeeper stands behind the gift-shop counter (counter x = -20.8, z 47.5..58.5), facing the customers (+X).
+-- Keep the floor behind the counter (x -25..-22, z 50..56) clear of props.
+-- (the shop's marble floor is laid 0.1 above the slab, so he stands at y = 6.1)
+Layout.Shopkeeper = { position = Vector3.new(-23.4, 6.1, 53.2), facing = Vector3.new(-12, 6.1, 53.2) }
 
 -- Door wall
 Layout.DoorWallZ = -60

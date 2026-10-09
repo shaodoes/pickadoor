@@ -16,6 +16,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Items = require(Shared.Items)
 local Lanterns = require(Shared.Lanterns)
 local LanternBuilder = require(Shared.LanternBuilder)
 local Remotes = require(Shared.Remotes)
@@ -53,6 +54,13 @@ end
 local openGuide = Instance.new("BindableEvent")
 openGuide.Name = "OpenGuide"
 openGuide.Parent = script.Parent
+-- Dialogue actions ("openShop" / "openLanterns") open the panels through these (wired below the panels).
+local openShop = Instance.new("BindableEvent")
+openShop.Name = "OpenShop"
+openShop.Parent = script.Parent
+local openLanterns = Instance.new("BindableEvent")
+openLanterns.Name = "OpenLanterns"
+openLanterns.Parent = script.Parent
 
 local function text(props: { [string]: any })
 	local merged = {
@@ -281,6 +289,18 @@ local function open(panel: Frame)
 	UIKit.show(panel)
 end
 
+-- open (never toggle shut) when a dialogue choice asks for a panel
+openShop.Event:Connect(function()
+	if not UIKit.isOpen(shopPanel) then
+		open(shopPanel)
+	end
+end)
+openLanterns.Event:Connect(function()
+	if not UIKit.isOpen(lanternPanel) then
+		open(lanternPanel)
+	end
+end)
+
 -- your balance, in the shop's header next to the close button
 do
 	local header = shopPanel:FindFirstChild("Header", true)
@@ -416,9 +436,9 @@ local function buildShop()
 		end
 	end
 
-	sectionHeader(shopList, -2, "GAME PASS")
+	sectionHeader(shopList, -20, "GAME PASS")
 	local owned = player:GetAttribute("HasRevivePass") == true
-	local pass = row(shopList, -1, 76, Colors.accent)
+	local pass = row(shopList, -19, 76, Colors.accent)
 	pass.BackgroundColor3 = Color3.fromRGB(251, 236, 226)
 	chip("heart", Colors.paperLight, Colors.accent).Parent = pass
 	rowTitle(pass, "REVIVE PASS", 170)
@@ -430,6 +450,45 @@ local function buildShop()
 		Parent = pass,
 	}, { style = owned and "muted" or "accent", icon = owned and "check" or nil })
 	passButton.Activated:Connect(promptRevivePass)
+
+	-- items: consumables stack to a cap, the laser is a one-time unlock (used from the hotbar, keys 1-4)
+	sectionHeader(shopList, -10, "ITEMS")
+	for i, def in Items.List do
+		local item = row(shopList, -10 + i, 76)
+		chip(def.icon, def.color).Parent = item
+		rowTitle(item, string.upper(def.name), 180)
+		local inventory = data and data.Inventory or {}
+		local count = tonumber(inventory[def.id]) or 0
+		local unlocked = def.kind == "unlock" and data ~= nil and data.LaserUnlocked == true
+		local full = def.kind == "consumable" and count >= def.cap
+		local status = if unlocked
+			then "OWNED"
+			elseif def.kind == "consumable" then string.format("%d/%d owned", count, def.cap)
+			else "one-time unlock"
+		rowBlurb(item, status .. "  -  " .. def.description, 180) -- status first: the blurb truncates at the end
+		local caption = if unlocked then "OWNED" elseif full then "FULL" else tostring(def.price)
+		local buy = UIKit.button(caption, {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -14, 0.5, 0),
+			Size = UDim2.fromOffset(146, 44),
+			Parent = item,
+		}, {
+			style = if unlocked or full then "muted" else "ink",
+			icon = if unlocked then "check" elseif full then nil else "key",
+			iconSize = 20,
+		})
+		buy.Activated:Connect(function()
+			if unlocked then
+				toast(string.format("You own the %s. Press %d to use it.", def.name, i))
+				return
+			elseif full then
+				toast(string.format("You can't carry more than %d %s.", def.cap, def.name), "error")
+				return
+			end
+			local res = Remotes.get("BuyItem"):InvokeServer(def.id)
+			toast(res.message, res.ok and "success" or "error")
+		end)
+	end
 
 	sectionHeader(shopList, 0, "LANTERNS")
 	for i, def in Lanterns.List do
@@ -458,12 +517,16 @@ local function buildShop()
 end
 
 -- Lanterns -------------------------------------------------------------------------------
-local VIEW_W = 256
+-- Left column: a viewport with the lantern turning (its flame animated by LanternFX, since particles
+-- don't render in viewports) over an info card: rarity pill, description, LIGHT and GLOW meters.
+local LanternFX = require(Shared.LanternFX)
+local VIEW_W = 272
+local VIEW_H = 226
 local viewport = UIKit.new("ViewportFrame", {
 	Name = "Preview",
-	Size = UDim2.new(0, VIEW_W, 1, 0),
-	BackgroundColor3 = Color3.fromRGB(48, 35, 28),
-	Ambient = Color3.fromRGB(150, 130, 110),
+	Size = UDim2.fromOffset(VIEW_W, VIEW_H),
+	BackgroundColor3 = Color3.fromRGB(44, 31, 25),
+	Ambient = Color3.fromRGB(128, 108, 90),
 	LightColor = Color3.fromRGB(255, 220, 180),
 	LightDirection = Vector3.new(-1, -1, -1),
 	Parent = lanternContent,
@@ -473,41 +536,184 @@ local viewport = UIKit.new("ViewportFrame", {
 	-- warm pool of light behind the lantern
 	UIKit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.fromRGB(255, 236, 205), Color3.fromRGB(150, 128, 112)),
+		Color = ColorSequence.new(Color3.fromRGB(255, 232, 196), Color3.fromRGB(128, 104, 90)),
 	}),
 })
+-- warm vignette over the render: two dark sheets that clear toward the middle (top/bottom, left/right)
+for _, rotation in { 90, 0 } do
+	UIKit.new("Frame", {
+		Name = "Vignette",
+		BackgroundColor3 = Color3.fromRGB(22, 11, 6),
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 1,
+		Parent = viewport,
+	}, {
+		UIKit.corner(12),
+		UIKit.new("UIGradient", {
+			Rotation = rotation,
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.45),
+				NumberSequenceKeypoint.new(0.28, 1),
+				NumberSequenceKeypoint.new(0.72, 1),
+				NumberSequenceKeypoint.new(1, 0.45),
+			}),
+		}),
+	})
+end
 local previewCamera = UIKit.new("Camera", { FieldOfView = 40, Parent = viewport })
 viewport.CurrentCamera = previewCamera
-previewCamera.CFrame = CFrame.lookAt(Vector3.new(0, 1.9, 6.4), Vector3.new(0, 1.35, 0))
+previewCamera.CFrame = CFrame.lookAt(Vector3.new(0, 1.8, 5.3), Vector3.new(0, 1.42, 0))
 local previewName = text({
+	Name = "Name",
 	Text = "",
 	FontFace = Face.bold,
-	TextSize = 24,
+	TextSize = 22,
 	TextColor3 = Colors.paper,
 	TextXAlignment = Enum.TextXAlignment.Center,
 	BackgroundColor3 = Colors.ink,
 	BackgroundTransparency = 0.25,
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -12),
-	Size = UDim2.new(1, -24, 0, 38),
+	Position = UDim2.new(0.5, 0, 1, -10),
+	Size = UDim2.new(1, -24, 0, 34),
 	ZIndex = 2,
 	Parent = viewport,
 })
 UIKit.corner(10).Parent = previewName
 
+-- info card under the viewport
+local info = UIKit.new("Frame", {
+	Name = "Info",
+	BackgroundColor3 = Colors.paperLight,
+	Position = UDim2.fromOffset(0, VIEW_H + 10),
+	Size = UDim2.new(0, VIEW_W, 1, -(VIEW_H + 10)),
+	Parent = lanternContent,
+}, { UIKit.corner(12), UIKit.stroke(Colors.ink, 1.5, 0.84) })
+local rarityPill = text({
+	Name = "Rarity",
+	Text = "",
+	FontFace = Face.bold,
+	TextSize = 12,
+	TextColor3 = Colors.paperLight,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	BackgroundTransparency = 0,
+	BackgroundColor3 = Colors.inkMuted,
+	AutomaticSize = Enum.AutomaticSize.X,
+	Position = UDim2.fromOffset(12, 10),
+	Size = UDim2.fromOffset(0, 20),
+	Parent = info,
+})
+UIKit.corner(10).Parent = rarityPill
+UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }).Parent = rarityPill
+local priceNote = text({
+	Name = "Price",
+	Text = "",
+	FontFace = Face.semi,
+	TextSize = 13,
+	TextColor3 = Colors.inkMuted,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -12, 0, 10),
+	Size = UDim2.fromOffset(120, 20),
+	Parent = info,
+})
+local blurb = text({
+	Name = "Description",
+	Text = "",
+	TextSize = 14,
+	TextColor3 = Colors.inkSoft,
+	TextWrapped = true,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Position = UDim2.fromOffset(12, 36),
+	Size = UDim2.new(1, -24, 0, 50),
+	Parent = info,
+})
+-- a 5-segment meter: `set(n)` lights the first n segments in the given colour
+local METER_SEGMENTS = 5
+local function meter(order: number, caption: string)
+	local y = 92 + (order - 1) * 22
+	text({
+		Name = caption,
+		Text = caption,
+		FontFace = Face.semi,
+		TextSize = 12,
+		TextColor3 = Colors.inkMuted,
+		Position = UDim2.fromOffset(12, y),
+		Size = UDim2.fromOffset(48, 16),
+		Parent = info,
+	})
+	local segments = {}
+	local segW = (VIEW_W - 24 - 60 - (METER_SEGMENTS - 1) * 4) / METER_SEGMENTS
+	for i = 1, METER_SEGMENTS do
+		segments[i] = UIKit.new("Frame", {
+			Name = "Seg" .. i,
+			BackgroundColor3 = Colors.paperDark,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(12 + 60 + (i - 1) * (segW + 4), y + 4),
+			Size = UDim2.fromOffset(segW, 8),
+			Parent = info,
+		}, { UIKit.corner(4) })
+	end
+	return function(lit: number, color: Color3)
+		for i, seg in segments do
+			seg.BackgroundColor3 = i <= lit and color or Colors.paperDark
+		end
+	end
+end
+local setLight = meter(1, "LIGHT")
+local setGlow = meter(2, "GLOW")
+-- map a stat across the catalog's spread onto 2..5 lit segments, so even the cheapest lantern shows some
+local statMin, statMax = {}, {}
+for _, key in { "lightRadius", "brightness" } do
+	statMin[key], statMax[key] = math.huge, -math.huge
+	for _, def in Lanterns.List do
+		statMin[key] = math.min(statMin[key], def[key])
+		statMax[key] = math.max(statMax[key], def[key])
+	end
+end
+local function segmentsFor(key: string, value: number): number
+	local span = statMax[key] - statMin[key]
+	local k = span > 0 and (value - statMin[key]) / span or 1
+	return 2 + math.round(k * (METER_SEGMENTS - 2))
+end
+
 local previewModel: Model? = nil
+local stopPreviewFX: (() -> ())? = nil
+local function stopPreview()
+	if stopPreviewFX then
+		stopPreviewFX()
+		stopPreviewFX = nil
+	end
+end
 local function preview(id: string)
+	stopPreview()
 	if previewModel then
 		previewModel:Destroy()
 	end
+	local def = Lanterns.getOrDefault(id)
 	previewModel = LanternBuilder.buildModel(id, true)
 	previewModel.Parent = viewport
-	previewName.Text = string.upper(Lanterns.getOrDefault(id).name)
+	if lanternPanel.Visible then
+		stopPreviewFX = LanternFX.animatePreview(previewModel)
+	end
+	previewName.Text = string.upper(def.name)
+	local rarityColor = Lanterns.rarityColor(def.rarity)
+	rarityPill.Text = string.upper(def.rarity)
+	rarityPill.BackgroundColor3 = rarityColor
+	local owned = data and data.OwnedLanterns[def.id]
+	priceNote.Text = if owned
+		then (data and data.EquippedLantern == def.id) and "EQUIPPED" or "OWNED"
+		else string.format("%d %s", def.price, Config.CurrencyName)
+	blurb.Text = def.description
+	setLight(segmentsFor("lightRadius", def.lightRadius), Colors.gold)
+	setGlow(segmentsFor("brightness", def.brightness), def.lightColor:Lerp(Colors.ink, 0.25))
 end
 
 lanternPanel:GetPropertyChangedSignal("Visible"):Connect(function()
 	if lanternPanel.Visible and data then
 		preview(data.EquippedLantern)
+	elseif not lanternPanel.Visible then
+		stopPreview()
 	end
 end)
 
@@ -531,9 +737,25 @@ local function buildLanterns()
 	for i, def in Lanterns.List do
 		local owned = data and data.OwnedLanterns[def.id]
 		local equipped = data and data.EquippedLantern == def.id
-		local item = row(lanternList, i, 66, equipped and Colors.green or nil)
-		chip("lantern", def.lightColor).Parent = item
-		rowTitle(item, string.upper(def.name), 150, 19)
+		local item = row(lanternList, i, 70, equipped and Colors.green or nil)
+		local rarityColor = Lanterns.rarityColor(def.rarity)
+		local tile = chip("lantern", def.lightColor)
+		UIKit.stroke(rarityColor, 2, 0).Parent = tile
+		tile.Parent = item
+		rowTitle(item, string.upper(def.name), 150, 8)
+		-- rarity in its colour, and the price while it's still locked
+		local sub = rowBlurb(item, "", 150)
+		sub.RichText = true
+		sub.TextSize = 14
+		sub.Position = UDim2.fromOffset(74, 38)
+		local rarityText = string.format(
+			'<font color="#%s"><b>%s</b></font>',
+			rarityColor:Lerp(Colors.ink, 0.2):ToHex(),
+			string.upper(def.rarity)
+		)
+		sub.Text = if owned
+			then rarityText
+			else string.format("%s  ·  %d %s", rarityText, def.price, Config.CurrencyName)
 		local action = UIKit.button(equipped and "EQUIPPED" or owned and "EQUIP" or "LOCKED", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -12, 0.5, 0),

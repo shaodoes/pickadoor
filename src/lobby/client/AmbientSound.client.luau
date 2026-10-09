@@ -33,7 +33,7 @@ local BEDS = { "AmbLibrary", "AmbBasement", "AmbWorkshop", "AmbWater" }
 -- relative level of each bed per room (missing = silent)
 local ROOM_MIX: { [string]: { [string]: number } } = {
 	Foyer = { AmbLibrary = 1, AmbBasement = 0.3 },
-	Shop = { AmbLibrary = 0.9, AmbBasement = 0.2 },
+	Shop = { AmbLibrary = 0.35, AmbBasement = 0.55 }, -- the shop went dark: less library air, more low rumble under the drone
 	Stair = { AmbLibrary = 0.8, AmbBasement = 0.6, AmbWater = 0.3 },
 	Hall = { AmbLibrary = 1, AmbBasement = 0.4, AmbWater = 0.8 },
 	DoorHall = { AmbLibrary = 0.35, AmbBasement = 1, AmbWater = 0.2 },
@@ -61,6 +61,30 @@ for _, name in BEDS do
 	end
 end
 local drone = Sfx.loop(SoundService, "DoorDrone", { volume = 0 })
+
+-- Lobby music: one slow loop from the start of the track, ducked per room. It all but disappears in the
+-- shop, where the shopkeeper's drone takes over, and thins out among the doors.
+local MUSIC_MIX: { [string]: number } =
+	{ Foyer = 1, Shop = 0.22, Stair = 0.9, Hall = 0.85, DoorHall = 0.5, Workshop = 0.7, Outside = 0.5 }
+local music = Sfx.make(SoundService, "LobbyMusic", { volume = 0 })
+if music then
+	music.Looped = true
+	music:Play()
+end
+
+-- The shop's drone hangs on the shopkeeper himself (built at runtime), or over his spot behind the counter.
+task.spawn(function()
+	local keeper = lobby:WaitForChild("Shopkeeper", 60)
+	local host: Instance? = keeper and (keeper:FindFirstChild("Head") or keeper.PrimaryPart)
+	if not host then
+		local point = Instance.new("Attachment")
+		point.Name = "ShopDroneAnchor"
+		point.WorldPosition = Vector3.new(-23.4, 10, 53.2)
+		point.Parent = workspace.Terrain
+		host = point
+	end
+	Sfx.loop(host :: Instance, "ShopDrone")
+end)
 
 local roomParts: { BasePart } = {}
 local currentRoom = "Hall"
@@ -111,6 +135,13 @@ local function updateBeds(room: string, maxTension: number)
 		local target = def.volume * maxTension * (DRONE_REACH[room] or 0.08)
 		drone.Volume += (target - drone.Volume) * 0.1
 		drone.PlaybackSpeed = 0.8 + maxTension * 0.3
+	end
+	if music then
+		-- the music also sinks a little while a door is counting down, so the drone can rise over it
+		local target = Config.Sounds.LobbyMusic.volume
+			* (MUSIC_MIX[room] or MUSIC_MIX.Outside)
+			* (1 - maxTension * 0.35)
+		music.Volume += (target - music.Volume) * 0.06
 	end
 end
 

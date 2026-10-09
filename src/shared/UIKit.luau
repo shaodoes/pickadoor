@@ -392,9 +392,106 @@ local ICONS: { [string]: (Frame, Color3, number) -> () } = {
 			ZIndex = 2,
 		}, math.floor(s * 0.1))
 	end,
+	-- items --------------------------------------------------------------------------------
+	pills = function(f, color, s)
+		-- a tilted two-tone capsule (solid half + outline half) with a loose round pill beside it
+		local tilt = part(f, {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.44, 0.38),
+			Size = UDim2.fromScale(0.94, 0.38),
+			Rotation = -28,
+		})
+		local outline = part(tilt, { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, 999)
+		UIKit.new("UIStroke", { Color = color, Thickness = math.max(1.5, s * 0.075), Parent = outline })
+		-- solid half: a fully rounded bar whose inner end is squared off by a plain bar
+		bar(tilt, color, 0, 0, 0.5, 1, 999, 2)
+		bar(tilt, color, 0.3, 0, 0.21, 1, nil, 2)
+		bar(f, color, 0.6, 0.66, 0.3, 0.3, 999)
+	end,
+	bandage = function(f, color, s)
+		-- a roll seen end-on, unrolling into a strip with a cross on it
+		ring(f, 0.02, 0.06, 0.48, s, color)
+		bar(f, color, 0.19, 0.23, 0.14, 0.14, 999) -- the roll's core
+		bar(f, color, 0.24, 0.5, 0.18, 0.32, 1) -- the strip's start, tucked under the roll
+		local strip = part(f, {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.38, 0.5),
+			Size = UDim2.fromScale(0.62, 0.32),
+		}, 3)
+		UIKit.new("UIStroke", { Color = color, Thickness = math.max(1.5, s * 0.07), Parent = strip })
+		bar(f, color, 0.65, 0.54, 0.08, 0.24, 1) -- stitched cross
+		bar(f, color, 0.57, 0.62, 0.24, 0.08, 1)
+	end,
+	lockpick = function(f, color, s)
+		-- a padlock with a thin pick slid into it from the right; the shaft vanishes into the body
+		ring(f, 0.1, 0.0, 0.42, s, color, 1)
+		part(f, {
+			BackgroundColor3 = color,
+			Position = UDim2.fromScale(0.0, 0.34),
+			Size = UDim2.fromScale(0.62, 0.5),
+			ZIndex = 2,
+		}, math.floor(s * 0.1))
+		part(f, {
+			BackgroundColor3 = color,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.68, 0.5),
+			Size = UDim2.fromScale(0.64, 0.08),
+			Rotation = -21,
+			ZIndex = 3,
+		}, 999)
+		part(f, {
+			BackgroundColor3 = color,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.93, 0.405),
+			Size = UDim2.fromScale(0.16, 0.15),
+			Rotation = -21,
+			ZIndex = 3,
+		}, 2)
+	end,
+	laser = function(f, color, s)
+		-- a pen from the bottom-left aimed at a dot in the top-right, three rays off the dot
+		part(f, {
+			BackgroundColor3 = color,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.34, 0.66),
+			Size = UDim2.fromScale(0.6, 0.2),
+			Rotation = -45,
+		}, math.floor(s * 0.06))
+		part(f, {
+			BackgroundColor3 = color,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.595, 0.405),
+			Size = UDim2.fromScale(0.13, 0.12),
+			Rotation = -45,
+		}, 1)
+		bar(f, color, 0.72, 0.1, 0.2, 0.2, 999) -- the dot
+		bar(f, color, 0.8, -0.04, 0.04, 0.1, 1) -- rays: up, right, diagonal
+		bar(f, color, 0.96, 0.18, 0.1, 0.04, 1)
+		part(f, {
+			BackgroundColor3 = color,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.95, 0.05),
+			Size = UDim2.fromScale(0.11, 0.04),
+			Rotation = -45,
+		}, 1)
+	end,
+	battery = function(f, color, s)
+		local shell = part(f, {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.02, 0.26),
+			Size = UDim2.fromScale(0.84, 0.48),
+		}, math.floor(s * 0.08))
+		UIKit.new("UIStroke", { Color = color, Thickness = math.max(1.5, s * 0.07), Parent = shell })
+		bar(f, color, 0.88, 0.4, 0.1, 0.2, 1) -- terminal
+		for i = 0, 2 do
+			bar(f, color, 0.1 + i * 0.22, 0.36, 0.16, 0.28, 1)
+		end
+	end,
 }
 
--- A square icon of `size` px. Names: play, close, key, cart, lantern, help, invite, heart, check, lock.
+-- A square icon of `size` px. Names: play, close, key, cart, lantern, help, invite, heart, check, lock,
+-- pills, bandage, lockpick, laser, battery.
 function UIKit.icon(name: string, color: Color3?, size: number?): Frame
 	local s = size or 24
 	local f = UIKit.new("Frame", {

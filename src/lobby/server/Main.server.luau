@@ -19,10 +19,12 @@ end
 DataService.start()
 Monetization.start()
 LanternService.start()
+require(Common.ItemService).start({ recharge = true }) -- items + laser battery recharge (lobby only)
 require(script.Parent.ShopService).start()
 require(script.Parent.QueueService).start(lobby)
 require(script.Parent.LeaderboardService).start(lobby)
 require(script.Parent.GuideService).start(lobby)
+require(script.Parent.ShopkeeperService).start(lobby)
 
 -- Lights tagged with a "Flicker" attribute by the builder: the furnace breathes, one bulb won't stay on.
 task.spawn(function()

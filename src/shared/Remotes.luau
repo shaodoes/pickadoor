@@ -14,6 +14,15 @@ local DEFINITIONS = {
 	LeaveQueue = "RemoteEvent",
 	QuickJoin = "RemoteEvent", -- client -> server: put me on the best mat
 	GuideSeen = "RemoteEvent", -- client -> server: finished the guide's introduction
+	-- [items] item purchase / use / laser remotes
+	BuyItem = "RemoteFunction", -- client -> server: item id -> { ok, message }
+	UseItem = "RemoteFunction", -- client -> server: item id -> { ok, message, cooldown? } (laser: toggles the tool)
+	LaserFire = "RemoteEvent", -- client -> server: firing: boolean
+	LaserAim = "RemoteEvent", -- client -> server: aim point (Vector3), ~10 Hz while firing
+	ItemEvent = "RemoteEvent", -- server -> client: kind ("speed" | "heal" | "unlock" | "stun" | "laserHit"), ...
+	-- [trial] door-room remotes
+	FollowIn = "RemoteEvent", -- client -> server: a safe-side player chooses to follow the others into the threat side
+	-- [shopkeeper] shopkeeper remotes
 }
 
 function Remotes.setup()

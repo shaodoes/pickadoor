@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Items = require(Shared.Items)
 local Lanterns = require(Shared.Lanterns)
 local Remotes = require(Shared.Remotes)
 
@@ -34,6 +35,11 @@ local function defaults()
 		TrialsPlayed = 0,
 		TrialsSurvived = 0,
 		SeenGuide = false,
+		-- items (see Shared.Items): consumable counts, the laser unlock + its battery, chests already looted
+		Inventory = {},
+		LaserUnlocked = false,
+		LaserBattery = Config.Items.LaserBatteryMax,
+		OpenedLocks = {},
 	}
 end
 
@@ -46,6 +52,20 @@ local function reconcile(data)
 	data.OwnedLanterns[Lanterns.DefaultId] = true
 	if not data.OwnedLanterns[data.EquippedLantern] then
 		data.EquippedLantern = Lanterns.DefaultId
+	end
+	-- every consumable has a count (0 when missing), clamped to its cap; unknown ids are dropped
+	local inventory = {}
+	for _, def in Items.List do
+		if def.kind == "consumable" then
+			local count = tonumber(data.Inventory[def.id]) or 0
+			inventory[def.id] = math.clamp(math.floor(count), 0, def.cap)
+		end
+	end
+	data.Inventory = inventory
+	data.LaserUnlocked = data.LaserUnlocked == true
+	data.LaserBattery = math.clamp(tonumber(data.LaserBattery) or 0, 0, Config.Items.LaserBatteryMax)
+	if typeof(data.OpenedLocks) ~= "table" then
+		data.OpenedLocks = {}
 	end
 	return data
 end
@@ -79,6 +99,10 @@ function DataService.snapshot(player: Player)
 		TrialsPlayed = d.TrialsPlayed,
 		TrialsSurvived = d.TrialsSurvived,
 		SeenGuide = d.SeenGuide,
+		Inventory = table.clone(d.Inventory),
+		LaserUnlocked = d.LaserUnlocked,
+		LaserBattery = d.LaserBattery,
+		OpenedLocks = table.clone(d.OpenedLocks),
 	}
 end
 

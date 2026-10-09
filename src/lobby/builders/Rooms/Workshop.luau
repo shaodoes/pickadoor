@@ -1575,12 +1575,13 @@ local function buildBench(model: Instance)
 			light.Shadows = false
 		end
 		lantern.Parent = bench
-		-- price tag under each one
+		-- price tag under each one, with a strip in the lantern's rarity colour along its top edge
+		local tagY = ringY - RING_H - 0.3
 		local tag = box(
 			bench,
 			"Tag",
 			Vector3.new(0.55, 0.32, 0.03),
-			Vector3.new(x, ringY - RING_H - 0.35, BACK - 0.14),
+			Vector3.new(x, tagY, BACK - 0.14),
 			Color3.fromRGB(226, 214, 184),
 			nil,
 			DETAIL
@@ -1591,6 +1592,15 @@ local function buildBench(model: Instance)
 			def.price > 0 and tostring(def.price) or "FREE",
 			Enum.Font.SpecialElite,
 			Color3.fromRGB(60, 40, 30)
+		)
+		box(
+			bench,
+			"RarityTag",
+			Vector3.new(0.55, 0.07, 0.035),
+			Vector3.new(x, tagY + 0.195, BACK - 0.14),
+			Lanterns.rarityColor(def.rarity),
+			Enum.Material.SmoothPlastic,
+			DETAIL
 		)
 	end
 	-- tools hung below the lanterns
@@ -1647,6 +1657,104 @@ local function buildBench(model: Instance)
 
 	-- enamel shade lamp over the bench (one of the room's three shadow-casting lights)
 	Kit.bareBulb(bench, Vector3.new(BX, FLOOR + 7.6, BACK - 2.2), 16, 1.5, true, "shade", CEIL)
+
+	-- fitting stand: a round iron plate with a brass post and a turntable top, a lantern standing on it
+	-- under a cold task lamp. The Model carries `LanternId` and `Mount` (CFrame of the lantern's base)
+	-- so a server service can swap `DisplayStand.Lantern` for the player's equipped one.
+	do
+		local stand = Kit.folder(bench, "DisplayStand")
+		local sx2, sz2 = BX + 1.9, z0 + 1.1
+		cyl(stand, "Plate", 0.08, 1.3, Vector3.new(sx2, BENCH_TOP + 0.04, sz2), "y", IRON, METAL, DETAIL)
+		cyl(stand, "Post", 0.5, 0.12, Vector3.new(sx2, BENCH_TOP + 0.33, sz2), "y", C.brass, METAL, DETAIL)
+		cyl(stand, "Turntable", 0.06, 0.9, Vector3.new(sx2, BENCH_TOP + 0.61, sz2), "y", C.brass, METAL, DETAIL)
+		-- door toward the player (the lantern's +X pane), base on the turntable
+		local mount = CFrame.new(sx2, BENCH_TOP + 0.64, sz2) * CFrame.Angles(0, math.pi / 2, 0)
+		stand:SetAttribute("LanternId", Lanterns.DefaultId)
+		stand:SetAttribute("Mount", mount)
+		local shown = LanternBuilder.buildModel(Lanterns.DefaultId, true)
+		shown.Name = "Lantern"
+		shown:PivotTo(mount * CFrame.new(0, shown:GetPivot().Position.Y, 0))
+		local light = shown:FindFirstChild("Light", true)
+		if light then
+			light.Brightness *= 0.5
+			light.Range = 8
+			light.Shadows = false
+		end
+		shown.Parent = stand
+
+		-- articulated task lamp on a weighted base at the bench's end, its shade aimed at the stand
+		local lamp = Kit.folder(bench, "TaskLamp")
+		local base = Vector3.new(x1 - 0.4, BENCH_TOP + 0.05, z0 + 1.45)
+		local elbow = Vector3.new(x1 - 1.0, BENCH_TOP + 2.7, z0 + 1.3)
+		local head = Vector3.new(sx2 + 0.25, BENCH_TOP + 4.3, sz2 + 0.05)
+		cyl(lamp, "LampBase", 0.1, 0.6, base, "y", IRON, METAL, DETAIL)
+		beam(lamp, "LampArm", base + Vector3.new(0, 0.05, 0), elbow, 0.08, 0.08, IRON, METAL, DETAIL)
+		box(lamp, "Elbow", Vector3.new(0.16, 0.16, 0.16), elbow, C.brass, METAL, {
+			Shape = Enum.PartType.Ball,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		})
+		beam(lamp, "LampArm", elbow, head, 0.08, 0.08, IRON, METAL, DETAIL)
+		local aim = Vector3.new(sx2, BENCH_TOP + 0.64, sz2)
+		local shadeCF = CFrame.lookAt(head, aim) * CFrame.Angles(0, math.pi / 2, 0) -- local +X = toward the stand
+		box(lamp, "Shade", Vector3.new(0.45, 0.7, 0.7), shadeCF, Color3.fromRGB(44, 50, 56), METAL, {
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		})
+		local cold = Color3.fromRGB(205, 226, 255)
+		local bulb = box(
+			lamp,
+			"Bulb",
+			Vector3.new(0.22, 0.22, 0.22),
+			shadeCF * CFrame.new(0.18, 0, 0),
+			cold,
+			Enum.Material.Neon,
+			{ Shape = Enum.PartType.Ball, CanCollide = false, CanQuery = false, CastShadow = false }
+		)
+		Kit.halo(bulb, 1.3, cold)
+		local spot = Instance.new("SpotLight")
+		spot.Face = Enum.NormalId.Right
+		spot.Angle = 48
+		spot.Range = 7
+		spot.Brightness = 2.4
+		spot.Color = cold
+		spot.Shadows = false
+		spot.Parent = bulb
+
+		-- a magnifier dangling from the lamp arm on a short chain
+		local hang = elbow:Lerp(head, 0.45)
+		local ringAt = hang - Vector3.new(0, 0.95, 0)
+		chain(lamp, hang, ringAt + Vector3.new(0, 0.32, 0))
+		ring(lamp, "MagnifierRim", CFrame.new(ringAt) * CFrame.Angles(0, math.rad(20), 0), 0.3, 0.06, 6, C.brass, METAL)
+		box(
+			lamp,
+			"MagnifierGlass",
+			Vector3.new(0.03, 0.52, 0.52),
+			CFrame.new(ringAt) * CFrame.Angles(0, math.rad(20), 0) * CFrame.Angles(0, math.pi / 2, 0),
+			Color3.fromRGB(205, 228, 232),
+			Enum.Material.Glass,
+			{
+				Shape = Enum.PartType.Cylinder,
+				Transparency = 0.5,
+				Reflectance = 0.2,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			}
+		)
+		box(
+			lamp,
+			"MagnifierHandle",
+			Vector3.new(0.09, 0.42, 0.09),
+			CFrame.new(ringAt - Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, math.rad(20), 0),
+			C.darkWood,
+			WOOD,
+			DETAIL
+		)
+	end
 
 	-- stool turned to the bench
 	local stool = Kit.folder(bench, "Stool")
