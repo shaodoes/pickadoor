@@ -29,6 +29,7 @@ local Config = require(Shared.Config)
 local Items = require(Shared.Items)
 local LaserBuilder = require(Shared.LaserBuilder)
 local Remotes = require(Shared.Remotes)
+local ChallengeService = require(script.Parent.ChallengeService)
 local DataService = require(script.Parent.DataService)
 local LanternService = require(script.Parent.LanternService)
 
@@ -277,6 +278,7 @@ local function stun(entity: Model, player: Player)
 	entity:SetAttribute("StunnedUntil", untilTime)
 	stunnedEvent:Fire(entity, player)
 	itemEvent(nil, "stun", entity, player)
+	ChallengeService.record(player, "laserStun")
 	task.delay(T.LaserStunDuration, function()
 		if entity.Parent and entity:GetAttribute("StunnedUntil") == untilTime then
 			entity:SetAttribute("Stunned", false)
@@ -532,6 +534,8 @@ function ItemService.use(player: Player, id: any)
 		d.Inventory[id] = math.max((d.Inventory[id] or 0) - 1, 0)
 	end)
 	setCooldown(player, id, def.cooldown)
+	ChallengeService.record(player, if id == "speed_pills" then "speedPills" else "bandage")
+	ChallengeService.record(player, "itemsUsed")
 	return result(true, message, { cooldown = def.cooldown })
 end
 
@@ -598,6 +602,8 @@ local function pickLock(player: Player, lock: Lock)
 	end
 	itemEvent(nil, "unlock", model, player)
 	notify(player, string.format("Lock picked. Inside: %d %s.", reward, Config.CurrencyName))
+	ChallengeService.record(player, "lockpick")
+	ChallengeService.record(player, "itemsUsed")
 
 	-- it locks itself again so other players can have a go
 	task.delay(T.LockRelockSeconds, function()

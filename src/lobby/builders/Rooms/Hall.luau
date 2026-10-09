@@ -139,7 +139,7 @@ function Hall.build(root: Instance)
 		Kit.bareBulb(model, Vector3.new(5, CEIL - 4.2, z), 22, 1.1, z == 8, "globe", CEIL)
 	end
 	Furniture.bookPile(model, Vector3.new(-4, Y, 6), 6)
-	Furniture.bookPile(model, Vector3.new(16, Y, -14), 5)
+	Furniture.bookPile(model, Vector3.new(19.5, Y, -16.5), 5) -- clear of the Wheel of Fate
 	if Furniture.boxes then
 		Furniture.boxes(model, CFrame.new(ROOM.x1 - 3, Y, 9.5) * CFrame.Angles(0, 0.3, 0), 2)
 	end
@@ -173,6 +173,9 @@ function Hall.build(root: Instance)
 		{ 21, 28, 6, 16 },
 		{ 21, 28, -16, -6 }, -- reading tables
 		{ -32, -22, -20, 30 }, -- window nook
+		{ -21, -12.8, -2, 5 }, -- reward stations (Layout.Stations): daily chest + ring
+		{ 10, 19, -17, -6.8 }, -- Wheel of Fate + ring
+		{ -14, -7.2, 19.4, 29 }, -- archivist's desk, catalogue + ring
 	}
 	Clutter.papers(
 		model,

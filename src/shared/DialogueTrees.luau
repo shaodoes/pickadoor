@@ -1,6 +1,8 @@
 -- Everything the lobby's characters say, as Dialogue trees (see Dialogue.luau for the node format).
 --   DialogueTrees.Librarian   the introduction: nine lines, straight through
 --   DialogueTrees.Shopkeeper  Teeth, behind the gift-shop counter: a small menu of questions
+--   DialogueTrees.Archivist   Mr. Ashby, at the challenges desk: a small menu; action "openChallenges"
+--   DialogueTrees.ArchivistGreetings  one-liners he whispers when you step onto his ring
 -- Shopkeeper context (opts.context): trialsPlayed: number, keys: number, currency: string, lasered: boolean.
 local Config = require(script.Parent.Config)
 local Dialogue = require(script.Parent.Dialogue)
@@ -182,5 +184,85 @@ DialogueTrees.Shopkeeper = {
 		nothing = { text = "Nothing is my favourite. Come again. You will." },
 	},
 } :: Tree
+
+------------------------------------------------------------------------------------------
+-- Mr. Ashby, the archivist. Dry, precise, kind, and not entirely here.
+------------------------------------------------------------------------------------------
+DialogueTrees.Archivist = {
+	speaker = "MR. ASHBY",
+	-- the station's cold teal, darkened so the cream tab text stays readable
+	accent = Color3.fromRGB(56, 118, 124),
+	start = "greeting",
+	nodes = {
+		greeting = {
+			text = "Good evening. Or morning. Down here it is always a quarter past something. Ashby, archivist. Mind the ink.",
+			next = "menu",
+		},
+
+		menu = {
+			text = "Is there something you'd like explained, or something you'd like entered?",
+			-- (five choices: the number keys reach 1-4, "Goodbye." is a click)
+			choices = {
+				{ text = "Show me the ledger.", action = "openChallenges" },
+				{ text = "What is this ledger?", next = "ledger" },
+				{ text = "Who are you?", next = "who" },
+				{ text = "The chest and the wheel?", next = "chest" }, -- short: a half-width cell truncates
+				{ text = "Goodbye.", next = "goodbye" },
+			},
+		},
+
+		-- "What is this ledger?"
+		ledger = {
+			text = "Everyone who goes through a door is written in here. Name, date, door. What came back, and what didn't.",
+			next = "ledger2",
+		},
+		ledger2 = {
+			text = "Each day I set you three small tasks, and three larger ones each week. Finish one, and I pay you for the trouble.",
+			next = "ledger3",
+		},
+		ledger3 = {
+			text = "The daily page turns at midnight, the weekly page on Monday. Universal time. The library doesn't keep yours.",
+			next = "menu",
+		},
+
+		-- "Who are you?"
+		who = {
+			text = "I was a patron, once. I borrowed a book, and I returned it... rather late.",
+			next = "who2",
+		},
+		who2 = {
+			text = "Forty-one years, by the stamp. The library was very understanding. It gave me a desk, and all the time I need to work it off.",
+			next = "who3",
+		},
+		who3 = {
+			text = "So I keep the accounts now. Everyone's. It's quiet work. I've stopped feeling the cold. I've stopped feeling most things.",
+			next = "menu",
+		},
+
+		-- "What's the chest and the wheel?"
+		chest = {
+			text = "The chest between the study desks opens once a day. Come every day and it grows generous. Miss one and it forgets you.",
+			next = "wheel",
+		},
+		wheel = {
+			text = "And at the back, the Wheel of Fate. One free turn a day. It keeps no records at all, which I find very upsetting.",
+			next = "menu",
+		},
+
+		-- "Goodbye."
+		goodbye = { text = "Go carefully. I would so hate to write you in red." },
+	},
+} :: Tree
+
+-- Whispered in a bubble over his head when you step onto the challenges ring (Archivist.client).
+DialogueTrees.ArchivistGreetings = {
+	"Name, date, door. Everything gets written down.",
+	"Mind the cold. It's only me.",
+	"Ah. You're on today's page.",
+	"Do sign in. Everyone does, eventually.",
+	"Your account is in order. Mostly.",
+	"Don't mind me. I'm only keeping count.",
+	"Back again. I'll make a note of it.",
+}
 
 return DialogueTrees

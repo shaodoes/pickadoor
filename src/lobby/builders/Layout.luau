@@ -46,6 +46,31 @@ Layout.Guide = { position = Vector3.new(4.5, 6, 45.5), facing = Vector3.new(12, 
 -- (the shop's marble floor is laid 0.1 above the slab, so he stands at y = 6.1)
 Layout.Shopkeeper = { position = Vector3.new(-23.4, 6.1, 53.2), facing = Vector3.new(-12, 6.1, 53.2) }
 
+-- Reading-hall reward stations: a glowing ring on the floor (walk onto it to open that station's UI)
+-- with its object just behind it. Kept off the stair->arch walkway, the workshop path and the desks:
+--   Daily      between the two study desks, the chest backed toward the window nook, facing the walkway
+--   Wheel      back-right, between the walkway and the right-hand reading table, turned toward the stair
+--   Challenges front-left, the archivist's little desk in front of the long wall shelves, facing -Z
+-- ring = floor centre (y = hall floor), object = floor-level CFrame whose -Z (LookVector) is the front.
+Layout.Stations = {
+	Daily = {
+		ring = Vector3.new(-16.2, 0, 1.5),
+		radius = 3,
+		object = CFrame.lookAt(Vector3.new(-20, 0, 1.5), Vector3.new(-10, 0, 1.5)),
+	},
+	Wheel = {
+		ring = Vector3.new(13.2, 0, -10.2),
+		radius = 3,
+		object = CFrame.lookAt(Vector3.new(14.9, 0, -13.9), Vector3.new(10.5, 0, -4.4)),
+	},
+	Challenges = {
+		ring = Vector3.new(-11, 0, 22.4),
+		radius = 2.6,
+		object = CFrame.lookAt(Vector3.new(-11, 0, 26.3), Vector3.new(-11, 0, 20)), -- the desk
+		npc = CFrame.lookAt(Vector3.new(-11, 0, 28.05), Vector3.new(-11, 0, 20)), -- stands behind it
+	},
+}
+
 -- Door wall
 Layout.DoorWallZ = -60
 Layout.DoorXs = { A = { -29, -19, -9 }, B = { 29, 19, 9 } }

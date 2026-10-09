@@ -41,6 +41,7 @@ local DoorRoomFlow = {}
 
 export type Deps = {
 	DataService: any?, -- rewards + stats (update(player, mutator))
+	ChallengeService: any?, -- record(player, stat): rightDoor / trials / huntSurvived challenge progress
 	Monetization: any?, -- ownsRevive(player)
 	Stalker: any?, -- the Stalker module; defaults to script.Parent.Stalker when present
 	returnToLobby: (() -> ())?, -- end of Return; return normally to run the next round here
@@ -422,6 +423,9 @@ function DoorRoomFlow.start(trial: Model, deps: Deps?): Controller
 		for _, p in placements do
 			if p.player.Parent then
 				if p.safe then
+					if d.ChallengeService then
+						d.ChallengeService.record(p.player, "rightDoor")
+					end
 					safeCount += 1
 					p.player:SetAttribute("Side", "Safe")
 					placeAt(p.player, safeArrive, safeCount)
@@ -476,6 +480,12 @@ function DoorRoomFlow.start(trial: Model, deps: Deps?): Controller
 						data.TrialsSurvived += 1
 					end
 				end)
+			end
+			if d.ChallengeService and side ~= "Door" then
+				d.ChallengeService.record(player, "trials")
+				if side == "Threat" and alive then
+					d.ChallengeService.record(player, "huntSurvived")
+				end
 			end
 			notify(player, line)
 		end

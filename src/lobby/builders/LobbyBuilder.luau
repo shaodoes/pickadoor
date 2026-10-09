@@ -117,6 +117,10 @@ function LobbyBuilder.build()
 		end
 	end
 	require(Builders.Locks).build(root) -- the lockpick demo chest (Workshop)
+	local stations = optionalRoom("Stations") -- reward stations in the reading hall (rings + chest/wheel/desk)
+	if stations then
+		stations.build(root)
+	end
 	-- keep the vaults out of the stairwell shaft that rises above the foyer
 	Natatorium.build(root, { { hs.x0 - 2, hs.x1 + 2, hs.z0 - 2, hs.z1 + 2 } })
 	root.Parent = workspace

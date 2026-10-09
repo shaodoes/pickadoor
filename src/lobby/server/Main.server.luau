@@ -25,6 +25,8 @@ require(script.Parent.QueueService).start(lobby)
 require(script.Parent.LeaderboardService).start(lobby)
 require(script.Parent.GuideService).start(lobby)
 require(script.Parent.ShopkeeperService).start(lobby)
+require(script.Parent.ArchivistService).start(lobby) -- Mr. Ashby, the challenges ledger
+require(script.Parent.RewardsService).start(lobby) -- daily chest, Wheel of Fate, challenge claims
 
 -- Lights tagged with a "Flicker" attribute by the builder: the furnace breathes, one bulb won't stay on.
 task.spawn(function()

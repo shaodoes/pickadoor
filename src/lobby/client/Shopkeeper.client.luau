@@ -446,6 +446,7 @@ local function talk()
 		onClose = function()
 			talking = false
 			prompt.Enabled = true
+			Remotes.get("Talked"):FireServer("Teeth") -- counts for the "Have a word with Teeth" challenge
 		end,
 		anchor = head,
 	})

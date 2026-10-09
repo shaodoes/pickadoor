@@ -11,6 +11,7 @@ local Config = require(Shared.Config)
 local Items = require(Shared.Items)
 local Lanterns = require(Shared.Lanterns)
 local Remotes = require(Shared.Remotes)
+local Rewards = require(Shared.Rewards)
 
 local DataService = {}
 
@@ -40,7 +41,38 @@ local function defaults()
 		LaserUnlocked = false,
 		LaserBattery = Config.Items.LaserBatteryMax,
 		OpenedLocks = {},
+		-- rewards (see Shared.Rewards): daily streak, wheel spins, the challenge ledger
+		Daily = { streak = 0, lastClaimDay = -1 },
+		Spins = { lastFreeDay = -1, extra = 0, total = 0 },
+		Challenges = { day = -1, week = -1, daily = {}, weekly = {} },
 	}
+end
+
+-- Clean up a rewards sub-table from an old or damaged save: keep known numeric fields, default the rest.
+local function numbers(value: any, template: { [string]: number })
+	local out = {}
+	for key, default in template do
+		local n = type(value) == "table" and tonumber(value[key]) or nil
+		out[key] = if n and n == n then math.floor(n) else default
+	end
+	return out
+end
+
+local function slots(list: any)
+	local out = {}
+	if type(list) ~= "table" then
+		return out
+	end
+	for _, slot in list do
+		if type(slot) == "table" and Rewards.challenge(slot.id) then
+			table.insert(out, {
+				id = slot.id,
+				progress = math.max(0, math.floor(tonumber(slot.progress) or 0)),
+				claimed = slot.claimed == true,
+			})
+		end
+	end
+	return out
 end
 
 local function reconcile(data)
@@ -67,6 +99,17 @@ local function reconcile(data)
 	if typeof(data.OpenedLocks) ~= "table" then
 		data.OpenedLocks = {}
 	end
+	data.Daily = numbers(data.Daily, { streak = 0, lastClaimDay = -1 })
+	data.Daily.streak = math.clamp(data.Daily.streak, 0, #Rewards.Daily)
+	data.Spins = numbers(data.Spins, { lastFreeDay = -1, extra = 0, total = 0 })
+	data.Spins.extra = math.clamp(data.Spins.extra, 0, 99)
+	local ch = type(data.Challenges) == "table" and data.Challenges or {}
+	data.Challenges = {
+		day = math.floor(tonumber(ch.day) or -1),
+		week = math.floor(tonumber(ch.week) or -1),
+		daily = slots(ch.daily),
+		weekly = slots(ch.weekly),
+	}
 	return data
 end
 
@@ -86,6 +129,14 @@ local function storageKey(player: Player)
 	return "u_" .. player.UserId
 end
 
+local function cloneSlots(list)
+	local out = {}
+	for i, slot in list do
+		out[i] = table.clone(slot)
+	end
+	return out
+end
+
 function DataService.snapshot(player: Player)
 	local profile = profiles[player]
 	if not profile then
@@ -103,6 +154,14 @@ function DataService.snapshot(player: Player)
 		LaserUnlocked = d.LaserUnlocked,
 		LaserBattery = d.LaserBattery,
 		OpenedLocks = table.clone(d.OpenedLocks),
+		Daily = table.clone(d.Daily),
+		Spins = table.clone(d.Spins),
+		Challenges = {
+			day = d.Challenges.day,
+			week = d.Challenges.week,
+			daily = cloneSlots(d.Challenges.daily),
+			weekly = cloneSlots(d.Challenges.weekly),
+		},
 	}
 end
 
@@ -111,6 +170,8 @@ local function replicate(player: Player)
 	if not profile then
 		return
 	end
+	-- challenges re-draw when the UTC day / week turns over (every push keeps them current)
+	Rewards.rollover(profile.data, player.UserId)
 	local stats = player:FindFirstChild("leaderstats")
 	if stats then
 		stats[Config.CurrencyName].Value = profile.data.Keys

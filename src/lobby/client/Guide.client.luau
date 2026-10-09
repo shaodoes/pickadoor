@@ -116,6 +116,7 @@ local function start()
 		onClose = function()
 			talking = false
 			prompt.Enabled = true
+			Remotes.get("Talked"):FireServer("Librarian") -- counts for the "Listen to the Librarian" challenge
 			if marker.Enabled then
 				marker.Enabled = false
 				Remotes.get("GuideSeen"):FireServer()

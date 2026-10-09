@@ -359,6 +359,22 @@ Config.Sounds = {
 		group = "World",
 		world = true,
 	},
+	-- [rewards] daily chest / Wheel of Fate / challenges (all reuse ids already vetted above)
+	WheelTick = { id = 134410911353980, volume = 0.35, speed = 1.35 }, -- the clock tick, quicker: one per segment
+	WheelTick3D = {
+		id = 134410911353980,
+		volume = 0.4,
+		speed = 1.35,
+		near = 4,
+		far = 34,
+		group = "World",
+		world = true,
+	},
+	WheelWin = { id = 100813529228543, volume = 0.6, speed = 0.85 }, -- the purchase chime, lower: the wheel lands
+	ChestCreak = { id = 9116604303, volume = 0.5, speed = 0.9, near = 5, far = 40, group = "World", world = true }, -- creaky lid
+	ChestUnlatch = { id = 9117185722, volume = 0.5, near = 4, far = 34, group = "World", world = true }, -- padlock opens
+	RewardChime = { id = 100813529228543, volume = 0.55, speed = 1.1 }, -- claim / challenge reward
+	LedgerScratch = { id = 9118184352, volume = 0.3, speed = 1.2, near = 3, far = 26, group = "World", world = true }, -- paper handling: the archivist writes it down
 }
 
 return Config

@@ -70,6 +70,7 @@ end
 
 DoorRoomFlow.start(trial, {
 	DataService = DataService,
+	ChallengeService = require(Common.ChallengeService), -- daily/weekly challenge progress (trials, doors, hunts)
 	Monetization = Monetization,
 	Stalker = Stalker,
 	returnToLobby = returnToLobby,
