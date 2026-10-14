@@ -297,6 +297,11 @@ local function refreshPlayButton()
 	playButton.Text = queued and "LEAVE QUEUE" or "PICK A DOOR"
 	setIcon(playButton, queued and "close" or "play", Colors.ink, queued and 24 or 30)
 	playButton:SetAttribute("BaseColor", queued and Colors.creamHot or Colors.cream)
+	-- the trim follows the face: teal for PICK A DOOR, red for LEAVE QUEUE
+	local playStroke = playFace:FindFirstChildOfClass("UIStroke")
+	if playStroke then
+		playStroke.Color = queued and Colors.dangerGlow or UIKit.Styles.primary.trim
+	end
 	if playGlow then
 		for _, layer in playGlow:GetChildren() do
 			if layer:IsA("Frame") then
@@ -941,7 +946,7 @@ local queueLabel = text({
 	Size = UDim2.new(1, -160, 1, -6),
 	Parent = queueBar,
 })
-UIKit.new("Frame", {
+local queueTab = UIKit.new("Frame", {
 	Name = "Tab",
 	BackgroundColor3 = Colors.accent,
 	BorderSizePixel = 0,
@@ -974,6 +979,32 @@ leaveButton.Activated:Connect(function()
 	Remotes.get("LeaveQueue"):FireServer()
 end)
 
+-- The bar takes the colour of the door you're queued at (Config.Modes: Solo / Duo / Squad): outline,
+-- tab and timer. LEAVE stays danger red.
+local queueStroke = queueBar:FindFirstChildOfClass("UIStroke")
+local queueTint: string? = nil
+local function tintQueueBar(mode: string)
+	if mode == queueTint then
+		return
+	end
+	queueTint = mode
+	local def = Config.Modes[mode]
+	-- the pad colours are deep (they light a dark hall): same hue, brighter and more saturated, like the
+	-- neon signs over the doors, so they read on the glass
+	local color = Colors.accent
+	if def then
+		local h, sat, _ = def.color:ToHSV()
+		color = Color3.fromHSV(h, math.max(sat, 0.6), 0.95)
+	end
+	if queueStroke then
+		queueStroke.Color = color
+		queueStroke.Transparency = 0.1
+		queueStroke.Thickness = 2
+	end
+	queueTab.BackgroundColor3 = color
+	timerFill.BackgroundColor3 = color
+end
+
 local function queueShownOffset(): number
 	return -(MENU_H * menuFit.Scale + 30)
 end
@@ -999,6 +1030,7 @@ task.spawn(function()
 			)
 		end
 		if pad then
+			tintQueueBar(tostring(pad:GetAttribute("Mode") or ""))
 			local timeLeft = pad:GetAttribute("TimeLeft") or 0
 			queueLabel.Text = string.format(
 				"%s   %d/%d   -   door opens in %ds",

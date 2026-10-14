@@ -1,7 +1,8 @@
 --[[
 	The door-entry sequence (a queue pad's countdown hit zero and the party walks through its door).
 	One timeline shared by the server (QueueService: walks the party in, waits, teleports), every client's
-	DoorFX (door swing, light, fog, slam: what onlookers see) and the party's DoorCutscene (camera + titles).
+	DoorFX (door swing, light, fog, slam: what onlookers see) and the party's DoorCutscene (camera shots, then
+	black; no title card: the trial's door room says PICK A DOOR).
 
 	Signalling (attributes only, no remotes):
 	  pad    Launching      true for the whole launch (as before)
@@ -31,8 +32,7 @@ DoorEntry.GUTTER = 4.6
 DoorEntry.SLAM = 5.3
 DoorEntry.SLAM_TIME = 0.12
 DoorEntry.BLACK = 5.6
-DoorEntry.TITLE = 5.75
-DoorEntry.LENGTH = 7.0 -- the server waits this long after t = 0 before teleporting
+DoorEntry.LENGTH = 6.1 -- the server waits this long after t = 0 before teleporting
 
 DoorEntry.OPEN_ANGLE = math.rad(100) -- DoorFX's countdown rattle tops out at 32 degrees
 local CREAK_ANGLE = math.rad(22)

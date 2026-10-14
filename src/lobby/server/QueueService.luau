@@ -206,7 +206,7 @@ local function launch(pad: PadState)
 	for i, player in party do
 		task.delay(DoorEntry.LEAD + DoorEntry.walkStart(i), walkIn, pad, player, i, #party)
 	end
-	-- the server is the clock: nothing teleports until the whole sequence (and its title card) has played
+	-- the server is the clock: nothing teleports until the whole sequence has played
 	task.wait(math.max(0, start + DoorEntry.LENGTH - workspace:GetServerTimeNow()))
 	setLeafSolid(pad, true)
 	clearPassage(pad, party)
@@ -266,7 +266,7 @@ local function launch(pad: PadState)
 				notify(player, "The door wouldn't open. Try again.")
 			end
 		else
-			-- the screen stays black on the title card while the teleport goes through; anyone still
+			-- the screen stays black while the teleport goes through; anyone still
 			-- here after 10 s is released back to the lobby
 			task.wait(10)
 			for _, player in party do
@@ -403,7 +403,7 @@ function QueueService.start(lobby: Instance)
 	TeleportService.TeleportInitFailed:Connect(function(player, result, message)
 		warn(string.format("[QueueService] TeleportInitFailed for %s: %s %s", player.Name, tostring(result), message))
 		notify(player, "Teleport failed. Step on a pad to try again.")
-		-- don't leave them sitting on the black title card until the launch times out
+		-- don't leave them sitting on the black screen until the launch times out
 		local pad = padOf(player)
 		if pad and pad.launching and player:GetAttribute("CutscenePad") then
 			eject(pad, player)

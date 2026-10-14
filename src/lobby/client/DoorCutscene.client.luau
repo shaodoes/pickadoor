@@ -7,8 +7,8 @@
 	  2.0 - 4.5  shot 2  low side angle: the party walks through one after another (this client walks
 	             its own character; the server issues the same MoveTo path as a fallback)
 	  4.5 - 5.6  shot 3  hold on the empty doorway; the light gutters; the door slams (shake + boom); black
-	  5.75 -     title   "PICK A DOOR" sprayed on in red over black, until the server teleports us or, in
-	             Studio, puts us back at the pad's Exit and clears CutscenePad (we fade back in)
+	  5.6 -      black   until the server teleports us or, in Studio, puts us back at the pad's Exit and
+	             clears CutscenePad (we fade back in). No title card: the trial's door room says PICK A DOOR
 
 	Meanwhile: controls locked, HUD (every other ScreenGui, core GUI, proximity prompts) hidden, letterbox
 	bars in, music and ambience ducked. Door / light / fog / slam SFX and the party fading into the dark
@@ -28,12 +28,6 @@ local Sfx = require(Shared:WaitForChild("Sfx"))
 
 local player = Players.LocalPlayer
 local pads = workspace:WaitForChild("Lobby"):WaitForChild("Pads")
-
-local SPRAY_FONT = Font.new("rbxasset://fonts/families/Bangers.json", Enum.FontWeight.Regular)
-local LABEL_FONT = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Bold)
-local PAINT = Color3.fromRGB(196, 34, 28) -- same spray red as the wall stencil (Signage)
-local PAINT_DARK = Color3.fromRGB(72, 14, 12)
-local CREAM = Color3.fromRGB(238, 226, 200)
 
 local HIDE_CORE = {
 	Enum.CoreGuiType.PlayerList,
@@ -150,125 +144,6 @@ local function buildShots(pad: Instance): { Cutscene.Shot }
 end
 
 ------------------------------------------------------------------------------------------
--- Title card: PICK A DOOR sprayed on over black (misregistered dark coat, overspray, runs)
-------------------------------------------------------------------------------------------
-local function titleCard(parent: Instance, subtitle: string): Frame
-	local holder = Instance.new("Frame")
-	holder.Name = "TitleCard"
-	holder.BackgroundTransparency = 1
-	holder.Size = UDim2.fromScale(1, 1)
-	holder.ZIndex = 20
-	holder.Parent = parent
-
-	local box = Instance.new("Frame")
-	box.Name = "Lettering"
-	box.BackgroundTransparency = 1
-	box.AnchorPoint = Vector2.new(0.5, 0.5)
-	box.Position = UDim2.fromScale(0.5, 0.44)
-	box.Size = UDim2.fromScale(0.78, 0.2)
-	box.Rotation = -2
-	box.ZIndex = 20
-	box.Parent = holder
-	local aspect = Instance.new("UIAspectRatioConstraint")
-	aspect.AspectRatio = 5
-	aspect.Parent = box
-
-	local reveals: { UIGradient } = {}
-	local function layer(name: string, color: Color3, offset: Vector2, scale: number, transparency: number, z: number)
-		local label = Instance.new("TextLabel")
-		label.Name = name
-		label.BackgroundTransparency = 1
-		label.AnchorPoint = Vector2.new(0.5, 0.5)
-		label.Position = UDim2.new(0.5, offset.X, 0.5, offset.Y)
-		label.Size = UDim2.fromScale(scale, scale)
-		label.FontFace = SPRAY_FONT
-		label.TextScaled = true
-		label.Text = "PICK A DOOR"
-		label.TextColor3 = color
-		label.TextTransparency = transparency
-		label.ZIndex = z
-		label.Parent = box
-		-- sprayed on left to right: a soft edge sweeps across
-		local reveal = Instance.new("UIGradient")
-		reveal.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0),
-			NumberSequenceKeypoint.new(0.46, 0),
-			NumberSequenceKeypoint.new(0.54, 1),
-			NumberSequenceKeypoint.new(1, 1),
-		})
-		reveal.Offset = Vector2.new(-1, 0)
-		reveal.Parent = label
-		table.insert(reveals, reveal)
-		return label
-	end
-	layer("Overspray", PAINT, Vector2.new(0, 0), 1.08, 0.86, 21)
-	layer("Overspray2", PAINT, Vector2.new(2, -1), 1.04, 0.8, 21)
-	layer("FirstCoat", PAINT_DARK, Vector2.new(5, 4), 1, 0, 22)
-	local main = layer("Paint", PAINT, Vector2.zero, 1, 0, 23)
-	for i, reveal in reveals do
-		task.delay((i - 1) * 0.02, function()
-			tween(reveal, 0.55, { Offset = Vector2.new(1, 0) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-		end)
-	end
-
-	-- runs: paint dribbling down from under the letters once it's on
-	local rng = Random.new()
-	for i = 1, 8 do
-		local x = 0.08 + (i - 1) / 7 * 0.84 + rng:NextNumber(-0.03, 0.03)
-		local run = Instance.new("Frame")
-		run.Name = "Run"
-		run.BorderSizePixel = 0
-		run.BackgroundColor3 = PAINT
-		run.Position = UDim2.fromScale(x, rng:NextNumber(0.72, 0.86))
-		run.Size = UDim2.fromOffset(rng:NextInteger(2, 4), 0)
-		run.ZIndex = 22
-		run.Parent = box
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = run
-		task.delay(0.1 + x * 0.55, function()
-			tween(
-				run,
-				rng:NextNumber(1.2, 2.4),
-				{ Size = UDim2.new(0, run.Size.X.Offset, 0.25, rng:NextInteger(8, 50)) },
-				Enum.EasingStyle.Sine
-			)
-		end)
-	end
-
-	local sub = Instance.new("TextLabel")
-	sub.Name = "Subtitle"
-	sub.BackgroundTransparency = 1
-	sub.AnchorPoint = Vector2.new(0.5, 0)
-	sub.Position = UDim2.fromScale(0.5, 0.6)
-	sub.Size = UDim2.fromScale(0.6, 0.04)
-	sub.FontFace = LABEL_FONT
-	sub.TextScaled = true
-	sub.Text = subtitle
-	sub.Visible = subtitle ~= ""
-	sub.TextColor3 = CREAM
-	sub.TextTransparency = 1
-	sub.ZIndex = 23
-	sub.Parent = holder
-	task.delay(0.7, function()
-		tween(sub, 0.6, { TextTransparency = 0.25 }, Enum.EasingStyle.Sine)
-	end)
-
-	-- one misprint flicker, like the wall stencil
-	task.delay(1.1, function()
-		if main.Parent then
-			main.Text = "YOU PICKED"
-			main.Position = UDim2.new(0.5, 6, 0.5, -3)
-			task.delay(0.09, function()
-				main.Text = "PICK A DOOR"
-				main.Position = UDim2.fromScale(0.5, 0.5)
-			end)
-		end
-	end)
-	return holder
-end
-
-------------------------------------------------------------------------------------------
 -- Walking our own character in (the client owns its physics, so this is the reliable half)
 ------------------------------------------------------------------------------------------
 type Session = {
@@ -278,7 +153,6 @@ type Session = {
 	undo: { () -> () },
 	conn: RBXScriptConnection?,
 	fired: { [string]: boolean },
-	title: Frame?,
 	savedSpeed: number?,
 	humanoid: Humanoid?,
 }
@@ -332,15 +206,6 @@ local function finish(session: Session)
 	end
 	local director = session.director
 	director:stopCamera()
-	if session.title then
-		for _, obj in session.title:GetDescendants() do
-			if obj:IsA("TextLabel") then
-				tween(obj, 0.35, { TextTransparency = 1 })
-			elseif obj:IsA("Frame") and obj.BackgroundTransparency < 1 then
-				tween(obj, 0.35, { BackgroundTransparency = 1 })
-			end
-		end
-	end
 	for i = #session.undo, 1, -1 do
 		session.undo[i]()
 	end
@@ -382,7 +247,6 @@ local function begin(pad: Instance)
 		undo = {},
 		conn = nil,
 		fired = {},
-		title = nil,
 	}
 	active = session
 	table.insert(session.undo, hideHud())
@@ -411,11 +275,6 @@ local function begin(pad: Instance)
 		end)
 		at("black", DoorEntry.BLACK, ct, function()
 			director:fade(1, 0.08)
-		end)
-		at("title", DoorEntry.TITLE, ct, function()
-			session.title = titleCard(director.gui, "") -- no subtitle under PICK A DOOR
-			Sfx.play("TitleSpray", 0.05)
-			Sfx.play("CutsceneSting", 0)
 		end)
 		-- the server always clears CutscenePad; this is only a safety net if that never arrives
 		if ct > DoorEntry.LENGTH + 25 then

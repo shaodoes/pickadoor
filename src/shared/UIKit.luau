@@ -39,6 +39,7 @@ UIKit.Colors = {
 	line = Color3.fromRGB(255, 255, 255),
 	-- status
 	danger = Color3.fromRGB(240, 84, 98),
+	dangerGlow = Color3.fromRGB(255, 160, 166), -- trim on red buttons
 	success = Color3.fromRGB(52, 196, 132),
 	-- Keys / currency only
 	key = Color3.fromRGB(236, 188, 96),
@@ -782,7 +783,7 @@ UIKit.Styles = {
 	paper = { face = C.inkSoft, text = C.paper, trim = C.line, trimAlpha = 0.82, alpha = 0.06 },
 	green = { face = C.green, text = C.paperLight, trim = C.line, trimAlpha = 0.72 },
 	muted = { face = C.paperDark, text = C.inkMuted, trim = C.line, trimAlpha = 0.9 },
-	danger = { face = C.danger, text = C.paperLight, trim = C.line, trimAlpha = 0.72 },
+	danger = { face = C.danger, text = C.paperLight, trim = C.dangerGlow, trimAlpha = 0.45 },
 }
 -- clearer names for new code (same tables)
 UIKit.Styles.primary = UIKit.Styles.cream
