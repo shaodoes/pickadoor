@@ -32,6 +32,13 @@ src/trial/          Trial scripts + builders/TrialBuilder
 attribute). `LobbyBuilder` clones them via `prop()` and falls back to primitive furniture if missing,
 so **save the place** after changing props.
 
+## Setting up on another machine
+1. Install Roblox Studio and [Rokit](https://github.com/rojo-rbx/rokit), then in the repo run `rokit install` (Rojo, StyLua, Selene). Install the Rojo Studio plugin: `rojo plugin install`.
+2. Open `places/Lobby.rbxl` in Studio. It holds what only lives in the place file: the mesh props in `ServerStorage.Props` and the store's wallpaper texture. (The repo's code rebuilds everything else.)
+3. Run `rojo serve` in the repo and click Connect in the Rojo plugin, so Studio picks up the latest scripts.
+4. In the command bar: `require(game.ServerStorage.Builders.LobbyBuilder).build()` to rebuild the lobby, then save.
+5. When you change props in Studio, save and copy the place back to `places/Lobby.rbxl` before committing.
+
 ## Develop
 1. `rojo build default.project.json -o Lobby.rbxl` and open it in Studio (or open your place and `rojo serve`, then connect with the Rojo plugin).
 2. Bake the map into the place: in the command bar run
