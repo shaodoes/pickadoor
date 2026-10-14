@@ -27,20 +27,36 @@ Config.FullQueueCountdown = 5 -- countdown is cut to this once the pad is full
 Config.LeaveCooldown = 2
 
 -- Trials
-Config.DoorPickTime = 10
-Config.TrialDuration = 12 * 60 -- real trials: 10-15 min
-Config.StubTrialDuration = 30 -- placeholder length until trial maps exist
+Config.DoorPickTime = 15 -- seconds to walk up to a door; whoever hasn't reached one by then glitches out
+Config.TrialDuration = 12 * 60 -- the hidden safety cap on one round (Config.Worlds.hardCap)
 Config.Rewards = {
-	Blessing = 40, -- good door
-	Hunt = 100, -- survived a bad door
+	Blessing = 40, -- left a safe world (a lounge) by its exit
+	Hunt = 100, -- escaped a dangerous world
+	Pickup = 2, -- one key pickup in a lounge (per player, per pickup)
+	Collectible = 15, -- a world's collectible, the first time you find it
 }
--- [trial config] door-room flow tuning (safe side / threat side durations etc.)
+-- [trial config] door-room flow tuning (see src/trial/server/DoorRoomFlow.luau)
 Config.DoorRoomFlow = {
-	pickTime = Config.DoorPickTime, -- PICK A DOOR countdown; each player's door is the Zone they stand in at zero
-	revealTime = 4, -- doors swing open, "THE RIGHT DOOR WAS ..." before the round starts
-	roundLength = 60, -- stub; real trials run 10-15 min (Config.TrialDuration) once the maps exist
-	rewardTime = 4, -- the tally on screen before the return countdown
-	returnTime = 5,
+	pickTime = Config.DoorPickTime, -- PICK A DOOR: walk into a door's Zone before this runs out
+	returnTime = 6, -- everyone is out / dead: the countdown back to the library
+	respawnDelay = 2.5, -- seconds from a death to the respawn (revive or the door room's Hold)
+	arrivalGrace = 15, -- seconds to wait for the rest of the party before the doors open
+}
+-- [worlds config] the worlds behind the doors (catalogue: src/shared/Worlds.luau)
+Config.Worlds = {
+	escalateAt = 180, -- seconds after a dangerous world's round starts: more entities + the blue guide path
+	hardCap = Config.TrialDuration, -- hidden safety cap: whoever is still inside a world is pulled out
+	loungeNudgeAt = 150, -- "the lounge is closing" for anyone still lounging
+	loungeCloseAfter = 30, -- lounges close this long after the dangerous side is finished
+	slotOrigin = Vector3.new(1000, 0, 0), -- world slot 1; each catalogue entry has its own slot
+	slotSpacing = 500, -- studs between world slots (along +X)
+	guide = {
+		color = Color3.fromRGB(70, 150, 255), -- DOORS-style blue
+		spacing = 4, -- studs between floor discs
+		discs = 20, -- pool size (the path is drawn this far ahead)
+		refresh = 1, -- seconds between re-routes
+		toast = "A blue light shows the way.",
+	},
 }
 -- The Follower (threat corridor stalker): see src/trial/server/Stalker.luau
 Config.Stalker = {
@@ -63,31 +79,6 @@ Config.Items = {
 	LaserStunDuration = 4,
 	LockHoldSeconds = 2.5, -- ProximityPrompt hold to pick a lock
 	LockRelockSeconds = 20, -- a picked chest closes and locks again after this long
-}
-
--- The pool of fates behind the doors. Each trial map will register itself here later.
-Config.Fates = {
-	{
-		id = "reading_room",
-		name = "The Endless Reading Room",
-		kind = "Blessing",
-		blurb = "Quiet. Warm. Something left you gifts.",
-	},
-	{ id = "sunlit_atrium", name = "Sunlit Atrium", kind = "Blessing", blurb = "Too bright for anything to hide." },
-	{
-		id = "poolrooms",
-		name = "The Poolrooms",
-		kind = "Blessing",
-		blurb = "Tiled halls of still water. Collect what floats.",
-	},
-	{ id = "level_zero", name = "Yellow Rooms", kind = "Hunt", blurb = "The hum is louder here. Keep moving." },
-	{ id = "night_motel", name = "Vacancy", kind = "Hunt", blurb = "Every room is checked in. Not by you." },
-	{
-		id = "long_hall",
-		name = "The Long Hallway",
-		kind = "Hunt",
-		blurb = "It is behind you. It is always behind you.",
-	},
 }
 
 -- UI / ambience sound effects (Creator Store audio, verified to load: PreloadAsync + TimeLength > 0).
@@ -343,8 +334,23 @@ Config.Sounds = {
 	PickChime = { id = 9114352428, volume = 0.6 }, -- evil church bell, twisted and slowed, 8.2 s: the doors are ready
 	PickTick = { id = 9120917861, volume = 0.5 }, -- soft temple-block clunk, 0.5 s: one per second of the countdown
 	PickTickHot = { id = 9119976314, volume = 0.65 }, -- dull clunky block strike, 0.75 s: the last three seconds (played lower)
-	-- voice line "PICK A DOOR" (asset id supplied by the user; 0 = not set, the chime + text stand in)
-	PickADoorVoice = { id = 0, volume = 1 },
+	-- voice line "Pick a door. The door you choose will determine your fate for the next 24 hours."
+	-- (assets/audio/pick_a_door_voice_norm.wav; asset id supplied by the user; 0 = not set: the
+	-- caption still shows, timed as if it played)
+	PickADoorVoice = { id = 0, volume = 1, length = 5.2 },
+	-- [door room] the first-person door sequence (DoorRoom.client.luau). Reused vetted ids until real
+	-- ones are picked; 0 = not set (skipped, the subtitle still shows).
+	HandleTurn = { id = 9117185722, volume = 0.5, speed = 1.3 }, -- padlock opening, quick: the latch
+	Breath = { id = 0, volume = 0.6 }, -- a slow nervous breath in front of an open door (not set yet)
+	GlitchBurst = { id = 9114277757, volume = 0.6, speed = 0.7 }, -- electric zap, low: the room tears
+	GlitchRing = { id = 18939003571, volume = 0.5 }, -- ear ringing: the room is gone
+	VoidStep = { id = 133215732722481, volume = 0.5, speed = 0.45 }, -- low whoosh: into the black
+	-- [worlds] shared world cues
+	RevealSting = { id = 9114352428, volume = 0.4, speed = 1.1 }, -- the PickChime bell: the reveal card
+	Escalate = { id = 9116878293, volume = 0.6, speed = 0.6 }, -- metal stress boom, low: SOMETHING CHANGED
+	GuideChime = { id = 100813529228543, volume = 0.3, speed = 0.7 }, -- soft chime: the blue path appears
+	KeyPickup = { id = 100813529228543, volume = 0.45, speed = 1.4 }, -- a key pickup in a lounge
+	ObjectiveDone = { id = 100813529228543, volume = 0.5, speed = 0.95 }, -- an objective step completes
 	StalkerHit = {
 		id = 9113525391, -- body slam against a car door, 1.55 s
 		alt = { 9113525643 },

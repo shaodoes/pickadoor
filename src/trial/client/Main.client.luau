@@ -1,12 +1,19 @@
 --[[
-	Trial overlay, in the lobby's spray-stencil language: the huge PICK A DOOR and its countdown, the
-	reveal, the round timer and the FOLLOW THEM IN button. Everything is driven by attributes that
-	DoorRoomFlow sets: workspace.Phase / TimeLeft / Revealed and the local player's Side / Picked /
-	Alive / RevivesLeft. The items hotbar and the lantern FX are separate LocalScripts beside this one.
+	Trial overlay (the world side; the door room's PICK A DOOR is DoorRoom.client.luau), in the lobby's
+	dark-glass UIKit style. Driven by attributes: workspace Phase / TimeLeft, the local player's Status /
+	World / Objective / Picked / LastWorld / Reward / RevivesLeft, and WorldEvent "escalate".
+
+	  reveal card    when you arrive in a world: door colour, world name, SAFE / DANGER, the video's
+	                 survival chance, up to three rule hints (5 s)
+	  objective      top-left while you're inside: the world and the current step ("SEARCH THE CRATE")
+	  escalation     "SOMETHING CHANGED" when a dangerous world escalates
+	  FOLLOW THEM IN in a lounge, while the round runs (the server checks someone is still in there)
+	  result         got out / didn't make it, then "waiting for the others" and WATCH (spectate) controls
+	  return         BACK TO THE LIBRARY and its countdown
+	The items hotbar and the lantern FX are separate LocalScripts beside this one.
 ]]
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -14,15 +21,14 @@ local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local Sfx = require(Shared.Sfx)
 local UIKit = require(Shared.UIKit)
+local Worlds = require(Shared.Worlds)
 
 local player = Players.LocalPlayer
 local C = UIKit.Colors
+local Face = UIKit.Face
 
-local PAINT = Color3.fromRGB(196, 34, 28) -- the lobby's spray red
-local PAINT_DARK = Color3.fromRGB(72, 14, 12) -- the misregistered under-coat
-local CREAM = Color3.fromRGB(238, 226, 200)
-local SPRAY = Font.new("rbxasset://fonts/families/Bangers.json", Enum.FontWeight.Regular)
-local rng = Random.new()
+local DOOR_COLORS = { Left = Color3.fromRGB(196, 44, 38), Right = Color3.fromRGB(56, 104, 214) }
+local DOOR_NAMES = { Left = "THE RED DOOR", Right = "THE BLUE DOOR" }
 
 local gui = UIKit.new("ScreenGui", {
 	Name = "TrialUI",
@@ -30,347 +36,479 @@ local gui = UIKit.new("ScreenGui", {
 	DisplayOrder = 5,
 	Parent = player:WaitForChild("PlayerGui"),
 })
-local holder = UIKit.new("Frame", {
-	Name = "Holder",
-	BackgroundTransparency = 1,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 24),
-	Size = UDim2.fromOffset(900, 420),
-	Parent = gui,
-})
-UIKit.fit(holder)
 
-------------------------------------------------------------------------------------------
--- Sprayed text: two rings of faint mist copies, a dark under-coat 3 px off, the main coat with
--- patchy density, the whole thing a touch off level. Returns a setter so the text can change.
-------------------------------------------------------------------------------------------
-local function patchy(): NumberSequence
-	local keys = { NumberSequenceKeypoint.new(0, rng:NextNumber(0.05, 0.15)) }
-	local t = 0
-	while t < 0.8 and #keys < 16 do
-		t += rng:NextNumber(0.1, 0.22)
-		if t >= 0.95 then
-			break
-		end
-		table.insert(keys, NumberSequenceKeypoint.new(t, rng:NextNumber(0, 0.2)))
-	end
-	table.insert(keys, NumberSequenceKeypoint.new(1, rng:NextNumber(0.05, 0.15)))
-	return NumberSequence.new(keys)
+local function tween(inst: Instance, time: number, goal: { [string]: any }, style: Enum.EasingStyle?)
+	local t = TweenService:Create(inst, TweenInfo.new(time, style or Enum.EasingStyle.Quad), goal)
+	t:Play()
+	return t
 end
 
-local function spray(parent: Instance, name: string, px: number, pos: UDim2, size: UDim2)
-	local box = UIKit.new("Frame", {
+local function text(props: { [string]: any })
+	local merged = {
+		BackgroundTransparency = 1,
+		FontFace = Face.body,
+		TextSize = 18,
+		TextColor3 = C.paper,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}
+	for k, v in props do
+		merged[k] = v
+	end
+	return UIKit.new("TextLabel", merged)
+end
+
+-- A glass card that pops in and out (a CanvasGroup so the whole card fades together).
+local function card(name: string, size: UDim2, anchor: Vector2, position: UDim2)
+	local holder = UIKit.new("Frame", {
 		Name = name,
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = pos,
+		AnchorPoint = anchor,
+		Position = position,
 		Size = size,
-		Rotation = rng:NextNumber(-1.6, 1.6),
-		Parent = parent,
+		Visible = false,
+		Parent = gui,
 	})
-	local layers: { TextLabel } = {}
-	local tinted: { TextLabel } = {}
-	local function layer(z: number, color: Color3, transparency: number, dx: number, dy: number)
-		local l = UIKit.new("TextLabel", {
-			BackgroundTransparency = 1,
-			FontFace = SPRAY,
-			Text = "",
-			TextScaled = true,
-			TextColor3 = color,
-			TextTransparency = transparency,
-			Position = UDim2.fromOffset(dx, dy),
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = z,
-			Parent = box,
-		})
-		table.insert(layers, l)
-		return l
-	end
-	for ring, spec in { { 0.035, 0.86 }, { 0.075, 0.93 } } do
-		local r = math.max(2, px * spec[1])
-		for i = 0, 7 do
-			local a = i / 8 * math.pi * 2 + ring * 0.4
-			table.insert(tinted, layer(1, PAINT, spec[2], math.cos(a) * r, math.sin(a) * r))
-		end
-	end
-	local under = layer(2, PAINT_DARK, 0.15, 3, 3)
-	UIKit.new("UIGradient", { Transparency = patchy(), Parent = under })
-	local main = layer(3, PAINT, 0, 0, 0)
-	table.insert(tinted, main)
-	UIKit.new("UIGradient", {
-		Transparency = patchy(),
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.new(0.8, 0.76, 0.76)),
-			ColorSequenceKeypoint.new(0.35, Color3.new(1, 1, 1)),
-			ColorSequenceKeypoint.new(0.7, Color3.new(0.93, 0.9, 0.9)),
-			ColorSequenceKeypoint.new(1, Color3.new(0.76, 0.72, 0.72)),
-		}),
-		Parent = main,
+	UIKit.fit(holder)
+	local group = UIKit.new("CanvasGroup", {
+		Name = "Group",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		GroupTransparency = 1,
+		Parent = holder,
 	})
-	local current = ""
-	return {
-		box = box,
-		main = main,
-		set = function(text: string, color: Color3?)
-			if text ~= current then
-				current = text
-				for _, l in layers do
-					l.Text = text
-				end
+	local face = UIKit.new("Frame", { Name = "Face", Size = UDim2.fromScale(1, 1), Parent = group })
+	UIKit.glass(face, { alpha = UIKit.Theme.sheetAlpha, radius = UIKit.Theme.radiusLarge })
+	return holder, group, face
+end
+
+local function showCard(holder: Frame, group: CanvasGroup, on: boolean)
+	if on then
+		holder.Visible = true
+		group.Position = UDim2.fromOffset(0, 10)
+		tween(group, 0.35, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back)
+	else
+		tween(group, 0.3, { GroupTransparency = 1 })
+		task.delay(0.32, function()
+			if group.GroupTransparency > 0.99 then
+				holder.Visible = false
 			end
-			local col = color or PAINT
-			for _, l in tinted do
-				l.TextColor3 = col
-			end
-			-- the under-coat follows the colour: dark red under red, warm brown under cream
-			under.TextColor3 = col == PAINT and PAINT_DARK or Color3.fromRGB(60, 42, 30)
-		end,
-	}
+		end)
+	end
 end
 
 ------------------------------------------------------------------------------------------
--- Layout: kicker line, headline stencil, a thin cream rule, the big number, a subline, the button
+-- Reveal card
 ------------------------------------------------------------------------------------------
--- (FontFace is set after creation: UIKit.label also sets Font, and property order isn't guaranteed)
-local kicker = UIKit.label({
-	Name = "Kicker",
-	TextSize = 24,
-	TextColor3 = CREAM,
-	TextTransparency = 0.1,
-	TextStrokeTransparency = 0.7,
-	TextXAlignment = Enum.TextXAlignment.Center,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.fromScale(0.5, 0),
-	Size = UDim2.fromOffset(900, 28),
-	Parent = holder,
-})
-kicker.FontFace = UIKit.Face.semi
-local headline = spray(holder, "Headline", 112, UDim2.new(0.5, 0, 0, 30), UDim2.fromOffset(900, 112))
-local rule = UIKit.new("Frame", {
-	Name = "Rule",
-	BackgroundColor3 = CREAM,
-	BackgroundTransparency = 0.3,
+local reveal, revealGroup, revealFace =
+	card("Reveal", UDim2.fromOffset(520, 270), Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.42))
+local revealBar = UIKit.new("Frame", {
+	Name = "DoorColor",
 	BorderSizePixel = 0,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 152),
-	Size = UDim2.fromOffset(320, 2),
-	Parent = holder,
+	Position = UDim2.fromOffset(0, 0),
+	Size = UDim2.new(0, 8, 1, 0),
+	Parent = revealFace,
+}, { UIKit.corner(4) })
+local revealKicker = text({
+	Position = UDim2.fromOffset(30, 22),
+	Size = UDim2.new(1, -60, 0, 20),
+	FontFace = Face.uiSemi,
+	TextSize = 16,
+	TextColor3 = C.inkMuted,
+	Parent = revealFace,
 })
-
--- the countdown number: a stencilled numeral with its own under-coat, popped by a UIScale
-local countBox = UIKit.new("Frame", {
-	Name = "Count",
-	BackgroundTransparency = 1,
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.new(0.5, 0, 0, 240),
-	Size = UDim2.fromOffset(480, 150),
-	Parent = holder,
-})
-local countScale = UIKit.new("UIScale", { Parent = countBox })
-local countUnder = UIKit.new("TextLabel", {
-	Name = "Under",
-	BackgroundTransparency = 1,
-	FontFace = SPRAY,
-	Text = "",
+local revealName = text({
+	Position = UDim2.fromOffset(30, 44),
+	Size = UDim2.new(1, -180, 0, 52),
+	FontFace = Face.display,
+	TextSize = 44,
+	TextColor3 = C.paperLight,
 	TextScaled = true,
-	TextColor3 = Color3.fromRGB(60, 42, 30),
-	TextTransparency = 0.2,
-	Position = UDim2.fromOffset(4, 4),
-	Size = UDim2.fromScale(1, 1),
-	ZIndex = 2,
-	Parent = countBox,
+	Parent = revealFace,
 })
-local countMain = UIKit.new("TextLabel", {
-	Name = "Main",
-	BackgroundTransparency = 1,
-	FontFace = SPRAY,
-	Text = "",
-	TextScaled = true,
-	TextColor3 = CREAM,
-	Size = UDim2.fromScale(1, 1),
-	ZIndex = 3,
-	Parent = countBox,
-})
-UIKit.new("UIGradient", { Transparency = patchy(), Parent = countMain })
-
-local sub = UIKit.label({
-	Name = "Sub",
-	TextSize = 24,
-	TextColor3 = CREAM,
-	TextTransparency = 0.15,
-	TextStrokeTransparency = 0.7,
+local revealChip = text({
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -26, 0, 54),
+	Size = UDim2.fromOffset(110, 32),
+	FontFace = Face.ui,
+	TextSize = 17,
 	TextXAlignment = Enum.TextXAlignment.Center,
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 322),
-	Size = UDim2.fromOffset(900, 30),
-	Parent = holder,
+	TextColor3 = C.ink,
+	BackgroundTransparency = 0,
+	Parent = revealFace,
 })
-sub.FontFace = UIKit.Face.semi
+UIKit.corner(16).Parent = revealChip
+local revealOdds = text({
+	Position = UDim2.fromOffset(30, 100),
+	Size = UDim2.new(1, -60, 0, 22),
+	FontFace = Face.uiSemi,
+	TextSize = 18,
+	TextColor3 = C.paper,
+	Parent = revealFace,
+})
+local revealHints = text({
+	Position = UDim2.fromOffset(30, 132),
+	Size = UDim2.new(1, -60, 0, 120),
+	TextSize = 18,
+	TextColor3 = C.paper,
+	TextTransparency = 0.1,
+	TextWrapped = true,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	LineHeight = 1.25,
+	Parent = revealFace,
+})
 
+local revealToken = 0
+local function showReveal(id: string, followed: boolean)
+	local def = Worlds.get(id)
+	if not def then
+		return
+	end
+	local picked = player:GetAttribute("Picked")
+	local doorColor = DOOR_COLORS[picked] or C.accent
+	revealBar.BackgroundColor3 = if followed then C.accent else doorColor
+	revealKicker.Text = if followed then "YOU FOLLOWED THEM IN" else (DOOR_NAMES[picked] or "BEHIND THE DOOR")
+	revealName.Text = def.name
+	local safe = def.kind == "safe"
+	revealChip.Text = if safe then "SAFE" else "DANGER"
+	revealChip.BackgroundColor3 = if safe then C.success else C.danger
+	revealOdds.Text = if def.survival
+		then string.format("Survival: %d%%", def.survival)
+		else (if safe then "You can rest here." else "Survival: unknown")
+	local lines = {}
+	for i, line in (def.play and def.play.hints) or {} do
+		if i > 3 then
+			break
+		end
+		table.insert(lines, "-  " .. line)
+	end
+	if #lines == 0 then
+		table.insert(lines, def.blurb)
+	end
+	revealHints.Text = table.concat(lines, "\n")
+	revealToken += 1
+	local token = revealToken
+	showCard(reveal, revealGroup, true)
+	Sfx.play("RevealSting", 0.02)
+	task.delay(5.5, function()
+		if revealToken == token then
+			showCard(reveal, revealGroup, false)
+		end
+	end)
+end
+
+------------------------------------------------------------------------------------------
+-- Objective (top-left)
+------------------------------------------------------------------------------------------
+local objective, objectiveGroup, objectiveFace =
+	card("Objective", UDim2.fromOffset(380, 78), Vector2.new(0, 0), UDim2.fromOffset(16, 16))
+local objWorld = text({
+	Position = UDim2.fromOffset(18, 10),
+	Size = UDim2.new(1, -36, 0, 18),
+	FontFace = Face.uiSemi,
+	TextSize = 14,
+	TextColor3 = C.inkMuted,
+	Parent = objectiveFace,
+})
+local objText = text({
+	Position = UDim2.fromOffset(18, 30),
+	Size = UDim2.new(1, -36, 0, 40),
+	FontFace = Face.ui,
+	TextSize = 20,
+	TextColor3 = C.paperLight,
+	TextWrapped = true,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Parent = objectiveFace,
+})
+
+------------------------------------------------------------------------------------------
+-- SOMETHING CHANGED
+------------------------------------------------------------------------------------------
+local changed = text({
+	Name = "Escalated",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.3),
+	Size = UDim2.fromOffset(900, 70),
+	FontFace = Face.display,
+	TextSize = 58,
+	TextColor3 = C.danger,
+	TextStrokeColor3 = C.shadow,
+	TextStrokeTransparency = 1,
+	TextTransparency = 1,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	Text = "SOMETHING CHANGED",
+	Parent = gui,
+})
+UIKit.fit(changed)
+
+local function somethingChanged()
+	Sfx.play("Escalate", 0.02)
+	changed.TextTransparency = 0
+	changed.TextStrokeTransparency = 0.6
+	for i = 1, 4 do
+		task.delay(i * 0.09, function()
+			changed.TextTransparency = if i % 2 == 1 then 0.6 else 0
+		end)
+	end
+	task.delay(2.6, function()
+		tween(changed, 0.8, { TextTransparency = 1, TextStrokeTransparency = 1 })
+	end)
+end
+
+Remotes.get("WorldEvent").OnClientEvent:Connect(function(id, kind)
+	if kind == "escalate" and id == player:GetAttribute("World") then
+		somethingChanged()
+	end
+end)
+
+------------------------------------------------------------------------------------------
+-- FOLLOW THEM IN
+------------------------------------------------------------------------------------------
 local followButton = UIKit.button("FOLLOW THEM IN", {
 	Name = "FollowIn",
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 362),
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -96),
 	Size = UDim2.fromOffset(250, 48),
-	TextSize = 22,
+	TextSize = 20,
 	Visible = false,
-	Parent = holder,
-}, { style = "accent", icon = "play", tooltip = "Into the dark, after the others. No way back." })
+	Parent = gui,
+}, { style = "accent", icon = "play", tooltip = "Into the dangerous world, after the others. No way back." })
+UIKit.fit(followButton)
 followButton.Activated:Connect(function()
 	Remotes.get("FollowIn"):FireServer()
 end)
 
 ------------------------------------------------------------------------------------------
--- Sounds
+-- Result + spectate (bottom centre) and the return countdown
 ------------------------------------------------------------------------------------------
-local uiSounds: { [string]: Sound } = {}
--- A UI sound at a chosen pitch (Sfx.play only jitters around 1): the hot ticks play lower.
-local function playUi(name: string, speed: number)
-	local def = Config.Sounds[name]
-	if not def or def.id == 0 then
+local result, resultGroup, resultFace =
+	card("Result", UDim2.fromOffset(460, 132), Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -24))
+local resultTitle = text({
+	Position = UDim2.fromOffset(22, 14),
+	Size = UDim2.new(1, -44, 0, 34),
+	FontFace = Face.display,
+	TextSize = 30,
+	TextColor3 = C.paperLight,
+	Parent = resultFace,
+})
+local resultSub = text({
+	Position = UDim2.fromOffset(22, 50),
+	Size = UDim2.new(1, -44, 0, 22),
+	TextSize = 18,
+	TextColor3 = C.paper,
+	Parent = resultFace,
+})
+local watchLabel = text({
+	Position = UDim2.fromOffset(22, 86),
+	Size = UDim2.new(1, -200, 0, 30),
+	FontFace = Face.uiSemi,
+	TextSize = 17,
+	TextColor3 = C.inkMuted,
+	Parent = resultFace,
+})
+local watchPrev = UIKit.button("<", {
+	Name = "Prev",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -112, 0, 82),
+	Size = UDim2.fromOffset(44, 36),
+	TextSize = 18,
+	Parent = resultFace,
+})
+local watchNext = UIKit.button(">", {
+	Name = "Next",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -62, 0, 82),
+	Size = UDim2.fromOffset(44, 36),
+	TextSize = 18,
+	Parent = resultFace,
+})
+local watchStop = UIKit.button("X", {
+	Name = "Stop",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -14, 0, 82),
+	Size = UDim2.fromOffset(44, 36),
+	TextSize = 18,
+	Parent = resultFace,
+}, { tooltip = "Stop watching" })
+
+local returnCard, returnGroup, returnFace =
+	card("Return", UDim2.fromOffset(420, 64), Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 24))
+local returnText = text({
+	Position = UDim2.fromOffset(22, 0),
+	Size = UDim2.new(1, -44, 1, 0),
+	FontFace = Face.ui,
+	TextSize = 22,
+	TextColor3 = C.paperLight,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	Parent = returnFace,
+})
+
+-- spectating: the camera on someone still inside a world
+local watching: Player? = nil
+local function candidates(): { Player }
+	local out = {}
+	for _, p in Players:GetPlayers() do
+		if p ~= player and p:GetAttribute("Status") == "In" then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+local function watch(target: Player?)
+	local camera = workspace.CurrentCamera
+	local character = target and target.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if target and humanoid then
+		watching = target
+		camera.CameraSubject = humanoid
+	else
+		watching = nil
+		local own = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if own then
+			camera.CameraSubject = own
+		end
+	end
+end
+local function cycle(step: number)
+	local list = candidates()
+	if #list == 0 then
+		watch(nil)
 		return
 	end
-	local sound = uiSounds[name]
-	if not sound then
-		sound = Sfx.make(SoundService, name) :: Sound
-		uiSounds[name] = sound
-	end
-	sound.PlaybackSpeed = speed
-	sound.TimePosition = 0
-	sound:Play()
+	local i = (watching and table.find(list, watching)) or 0
+	watch(list[(i - 1 + step) % #list + 1])
 end
-
-local function pop(hot: boolean)
-	countScale.Scale = 1.25
-	TweenService:Create(countScale, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 })
-		:Play()
-	if hot then
-		countMain.TextColor3 = PAINT
-		TweenService:Create(countMain, TweenInfo.new(0.6), { TextColor3 = C.creamHot }):Play()
-	else
-		countMain.TextColor3 = CREAM
-	end
-end
-
-local function setCount(text: string)
-	countMain.Text = text
-	countUnder.Text = text
-end
+watchPrev.Activated:Connect(function()
+	cycle(-1)
+end)
+watchNext.Activated:Connect(function()
+	cycle(1)
+end)
+watchStop.Activated:Connect(function()
+	watch(nil)
+end)
 
 ------------------------------------------------------------------------------------------
 -- Render
 ------------------------------------------------------------------------------------------
-local function mmss(seconds: number)
-	return string.format("%d:%02d", seconds // 60, seconds % 60)
-end
+local lastWorld: string? = nil
+local resultShown, objectiveShown, returnShown = false, false, false
 
-local lastPhase, lastTime = nil, nil
-
-local function render()
-	local phase = workspace:GetAttribute("Phase") or "Waiting"
-	local t = workspace:GetAttribute("TimeLeft") or 0
-	local side = player:GetAttribute("Side") or "Door"
-	local alive = player:GetAttribute("Alive") ~= false
-	local revealed = workspace:GetAttribute("Revealed")
-	local numeral = revealed == "Left" and "I" or revealed == "Right" and "II" or "?"
-	local revives = player:GetAttribute("RevivesLeft") or 0
-	local phaseChanged = phase ~= lastPhase
-	local timeChanged = t ~= lastTime
-	lastPhase, lastTime = phase, t
-
-	followButton.Visible = false
-	kicker.Text = ""
-	rule.Visible = true
-
-	if phase == "Pick" then
-		headline.set("PICK A DOOR", PAINT)
-		setCount(tostring(t))
-		sub.Text = "Stand at the door you trust."
-		if phaseChanged then
-			Sfx.play("PickChime", 0.02)
-			if Config.Sounds.PickADoorVoice.id ~= 0 then
-				Sfx.play("PickADoorVoice", 0)
-			end
-			countMain.TextColor3 = CREAM
-		end
-		if timeChanged and t > 0 then
-			if t <= 3 then
-				playUi("PickTickHot", 0.75)
-			else
-				Sfx.play("PickTick")
-			end
-			pop(t <= 3)
-		end
-	elseif phase == "Resolve" or phase == "Reveal" then
-		kicker.Text = string.format("THE RIGHT DOOR WAS %s", numeral)
-		setCount("")
-		if side == "Safe" then
-			headline.set("YOU'RE SAFE.", CREAM)
-			sub.Text = "For now."
-		elseif side == "Threat" then
-			headline.set("WRONG DOOR", PAINT)
-			sub.Text = "Something is in here with you."
-		else
-			headline.set("", PAINT)
-			sub.Text = "The doors are open."
-		end
-	elseif phase == "Round" then
-		countMain.TextColor3 = CREAM
-		if not alive then
-			headline.set("YOU DIDN'T MAKE IT", PAINT)
-			setCount(mmss(t))
-			sub.Text = "Watch from the warm side."
-		elseif side == "Threat" then
-			headline.set("WRONG DOOR", PAINT)
-			setCount("SURVIVE  " .. mmss(t))
-			sub.Text = revives > 0 and "Keep moving.  Revive ready." or "Keep moving."
-		elseif side == "Safe" then
-			headline.set("YOU'RE SAFE.", CREAM)
-			setCount(mmss(t))
-			sub.Text = "For now."
-			followButton.Visible = true
-		else
-			headline.set("", PAINT)
-			setCount(mmss(t))
-			sub.Text = "You missed the doors. Wait for the next round."
-		end
-	elseif phase == "Reward" then
-		setCount("")
-		if side == "Door" then
-			headline.set("", PAINT)
-			sub.Text = "Next time, pick a door."
-		elseif not alive then
-			headline.set("YOU DIDN'T MAKE IT", PAINT)
-			sub.Text = "No keys this time."
-		elseif side == "Threat" then
-			headline.set("YOU SURVIVED", CREAM)
-			sub.Text = string.format("+%d %s", Config.Rewards.Hunt, Config.CurrencyName)
-		else
-			headline.set("THE RIGHT DOOR", CREAM)
-			sub.Text = string.format("+%d %s", Config.Rewards.Blessing, Config.CurrencyName)
-		end
-	elseif phase == "Return" then
-		headline.set("BACK TO THE LIBRARY", CREAM)
-		setCount(tostring(t))
-		sub.Text = ""
-	else
-		headline.set("WAITING FOR YOUR PARTY", CREAM)
-		rule.Visible = false
-		setCount("")
-		sub.Text = "The doors are listening."
+local function setShown(which: string, on: boolean)
+	if which == "result" and on ~= resultShown then
+		resultShown = on
+		showCard(result, resultGroup, on)
+	elseif which == "objective" and on ~= objectiveShown then
+		objectiveShown = on
+		showCard(objective, objectiveGroup, on)
+	elseif which == "return" and on ~= returnShown then
+		returnShown = on
+		showCard(returnCard, returnGroup, on)
 	end
 end
 
-for _, name in { "Phase", "TimeLeft", "Revealed" } do
-	workspace:GetAttributeChangedSignal(name):Connect(render)
-end
-for _, name in { "Side", "Alive", "RevivesLeft" } do
-	player:GetAttributeChangedSignal(name):Connect(render)
+local function render()
+	local phase = workspace:GetAttribute("Phase") or "Waiting"
+	local status = player:GetAttribute("Status") or "Door"
+	local worldId = player:GetAttribute("World")
+	local def = Worlds.get(worldId)
+
+	-- arriving somewhere new: the reveal card (a lounge -> its dangerous world is a follow). The
+	-- World attribute lands a moment before Status "In": only count the arrival once both have.
+	local arrived = if status == "In" then worldId else nil
+	if arrived ~= lastWorld and (arrived or not worldId) then
+		local previous = lastWorld
+		lastWorld = arrived
+		if arrived then
+			showReveal(arrived, previous ~= nil)
+		end
+	end
+
+	-- out of the world before the reveal card timed out: take it down
+	if status ~= "In" and reveal.Visible then
+		revealToken += 1
+		showCard(reveal, revealGroup, false)
+	end
+
+	-- objective
+	local inside = status == "In" and def ~= nil
+	setShown("objective", inside and phase ~= "Return")
+	if inside and def then
+		objWorld.Text = string.upper(def.name)
+		if def.kind == "safe" then
+			objText.Text = "Look around. Leave by the exit whenever you like."
+		else
+			local revives = player:GetAttribute("RevivesLeft") or 0
+			objText.Text = (player:GetAttribute("Objective") or "FIND A WAY OUT")
+				.. (if revives > 0 then "   (revive ready)" else "")
+		end
+	end
+	followButton.Visible = inside and def ~= nil and def.kind == "safe" and phase == "Round"
+
+	-- result + spectate
+	local out = status == "Escaped" or status == "Dead" or status == "Spectating"
+	setShown("result", out)
+	if out then
+		local reward = player:GetAttribute("Reward") or 0
+		local last = Worlds.get(player:GetAttribute("LastWorld"))
+		if status == "Escaped" then
+			resultTitle.Text = if last and last.kind == "safe"
+				then "YOU LEFT " .. string.upper(last.name)
+				else "YOU GOT OUT"
+			resultTitle.TextColor3 = C.success
+			resultSub.Text = string.format("+%d %s.  Waiting for the others.", reward, Config.CurrencyName)
+		elseif status == "Dead" then
+			resultTitle.Text = "YOU DIDN'T MAKE IT"
+			resultTitle.TextColor3 = C.danger
+			resultSub.Text = if last then "No keys this time. Waiting for the others." else "You never chose a door."
+		else
+			resultTitle.Text = "THE DOORS ARE CLOSED"
+			resultTitle.TextColor3 = C.paperLight
+			resultSub.Text = "This round started without you. Wait for the next one."
+		end
+		local list = if phase == "Return" then {} else candidates()
+		if watching and not table.find(list, watching) then
+			watch(nil)
+		end
+		watchLabel.Text = if watching
+			then "Watching " .. watching.DisplayName
+			elseif #list > 0 then string.format("%d still inside. Watch them:", #list)
+			else "Nobody left inside."
+		watchPrev.Visible = #list > 0
+		watchNext.Visible = #list > 0
+		watchStop.Visible = watching ~= nil
+	elseif watching then
+		watch(nil)
+	end
+
+	-- return
+	setShown("return", phase == "Return")
+	if phase == "Return" then
+		returnText.Text = string.format("BACK TO THE LIBRARY  %d", workspace:GetAttribute("TimeLeft") or 0)
+		if watching then
+			watch(nil)
+		end
+	end
 end
 
--- Toasts go top-right so they never sit on the stencil.
-Remotes.get("Notify").OnClientEvent:Connect(function(text)
-	UIKit.toast(gui, text)
+for _, name in { "Phase", "TimeLeft" } do
+	workspace:GetAttributeChangedSignal(name):Connect(render)
+end
+for _, name in { "Status", "World", "Objective", "RevivesLeft", "Reward", "LastWorld" } do
+	player:GetAttributeChangedSignal(name):Connect(render)
+end
+-- other players coming and going change who can be watched
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if resultShown then
+			render()
+		end
+	end
+end)
+
+-- Toasts go top-right so they never sit on the objective card.
+Remotes.get("Notify").OnClientEvent:Connect(function(message, kind)
+	UIKit.toast(gui, message, kind)
 	local toasts = gui:FindFirstChild("Toasts")
 	if toasts then
 		toasts.AnchorPoint = Vector2.new(1, 0)

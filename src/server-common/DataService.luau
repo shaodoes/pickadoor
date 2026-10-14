@@ -53,6 +53,9 @@ local function defaults()
 		Deaths = 0,
 		Titles = { [Titles.DefaultId] = true },
 		EquippedTitle = Titles.DefaultId,
+		-- worlds (see Shared.Worlds): every world you've been inside, every collectible you've found
+		WorldsSeen = {},
+		Collectibles = {},
 	}
 end
 
@@ -144,6 +147,18 @@ local function reconcile(data)
 		end
 	end
 	data.Titles = titles
+	-- world sets: string keys -> true only
+	for _, key in { "WorldsSeen", "Collectibles" } do
+		local set = {}
+		if type(data[key]) == "table" then
+			for id, value in data[key] do
+				if type(id) == "string" and value == true then
+					set[id] = true
+				end
+			end
+		end
+		data[key] = set
+	end
 	if not titles[data.EquippedTitle] then
 		data.EquippedTitle = Titles.DefaultId
 	end
@@ -203,6 +218,8 @@ function DataService.snapshot(player: Player)
 		Deaths = d.Deaths,
 		Titles = table.clone(d.Titles),
 		EquippedTitle = d.EquippedTitle,
+		WorldsSeen = table.clone(d.WorldsSeen),
+		Collectibles = table.clone(d.Collectibles),
 	}
 end
 

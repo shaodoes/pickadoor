@@ -21,7 +21,9 @@ local DEFINITIONS = {
 	LaserAim = "RemoteEvent", -- client -> server: aim point (Vector3), ~10 Hz while firing
 	ItemEvent = "RemoteEvent", -- server -> client: kind ("speed" | "heal" | "unlock" | "stun" | "laserHit"), ...
 	-- [trial] door-room remotes
-	FollowIn = "RemoteEvent", -- client -> server: a safe-side player chooses to follow the others into the threat side
+	FollowIn = "RemoteEvent", -- client -> server: a lounge player follows the others into the dangerous world
+	DoorEvent = "RemoteEvent", -- server -> one client: the door sequence ("commit" | "glitch" | "reveal", data)
+	WorldEvent = "RemoteEvent", -- both ways: (worldId, kind, ...) between a world's server and client modules
 	-- [shopkeeper] shopkeeper remotes
 	-- [rewards] daily reward / Wheel of Fate / challenges (see Shared.Rewards)
 	ClaimDaily = "RemoteFunction", -- client -> server: () -> { ok, message, day?, keys?, spins?, items? }
