@@ -168,15 +168,15 @@ local function refreshSlot(slot: Slot)
 		slot.batteryTrack.Visible = unlocked
 		local level = math.clamp(battery() / BATTERY_MAX, 0, 1)
 		slot.batteryFill.Size = UDim2.fromScale(level, 1)
-		slot.batteryFill.BackgroundColor3 = C.accent:Lerp(C.green, math.clamp((level - 0.15) / 0.5, 0, 1))
+		slot.batteryFill.BackgroundColor3 = C.danger:Lerp(C.success, math.clamp((level - 0.15) / 0.5, 0, 1))
 		if laserEquipped then
 			slot.stroke.Color = def.color
 			slot.stroke.Thickness = 2.5
 			slot.stroke.Transparency = 0.05
 		else
-			slot.stroke.Color = C.paper
-			slot.stroke.Thickness = 1.5
-			slot.stroke.Transparency = 0.86
+			slot.stroke.Color = C.line
+			slot.stroke.Thickness = 1
+			slot.stroke.Transparency = UIKit.Theme.lineAlpha
 		end
 	end
 end
@@ -243,12 +243,13 @@ local function buildSlot(bar: Frame, index: number, def: Items.ItemDef): Slot
 	local face = UIKit.new("Frame", {
 		Name = "Face",
 		BackgroundColor3 = C.ink,
+		BackgroundTransparency = UIKit.Theme.glassAlpha,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		Parent = button,
-	}, { UIKit.corner(12), UIKit.sheen(0.6) })
-	local stroke = UIKit.stroke(C.paper, 1.5, 0.86)
+	}, { UIKit.corner(14), UIKit.sheen(0.45) })
+	local stroke = UIKit.stroke(C.line, 1, UIKit.Theme.lineAlpha)
 	stroke.Parent = face
 	local iconHolder = UIKit.new("Frame", {
 		Name = "IconHolder",

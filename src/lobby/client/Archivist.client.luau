@@ -221,26 +221,26 @@ local function whisper(text: string)
 		Position = UDim2.fromOffset(0, 6),
 		Parent = gui,
 	})
-	-- cream paper card with a little tail pointing down at him
+	-- dark glass card with a little tail pointing down at him
 	UIKit.new("Frame", {
 		Name = "Tail",
-		BackgroundColor3 = Colors.paper,
+		BackgroundColor3 = Colors.glass,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 1, -12),
 		Size = UDim2.fromOffset(12, 12),
 		Rotation = 45,
 		Parent = group,
-	}, { UIKit.stroke(Colors.ink, 1.5, 0.45) })
+	}, { UIKit.hairline(0.75) })
 	UIKit.new("Frame", {
 		Name = "Card",
-		BackgroundColor3 = Colors.paper,
+		BackgroundColor3 = Colors.glass,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 1, -12),
 		Parent = group,
 	}, {
-		UIKit.corner(10),
-		UIKit.stroke(Colors.ink, 1.5, 0.45),
+		UIKit.corner(12),
+		UIKit.hairline(0.75),
 		UIKit.new("UIPadding", {
 			PaddingLeft = UDim.new(0, 12),
 			PaddingRight = UDim.new(0, 12),
@@ -253,7 +253,7 @@ local function whisper(text: string)
 			FontFace = SERIF_ITALIC,
 			TextSize = 15,
 			TextWrapped = true,
-			TextColor3 = Colors.ink,
+			TextColor3 = Colors.paper,
 			BackgroundTransparency = 1,
 			Size = UDim2.fromScale(1, 1),
 		}),

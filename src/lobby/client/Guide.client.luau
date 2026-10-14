@@ -14,7 +14,6 @@ local Remotes = require(Shared.Remotes)
 local UIKit = require(Shared.UIKit)
 
 local player = Players.LocalPlayer
-local Colors, Face = UIKit.Colors, UIKit.Face
 
 local lobby = workspace:WaitForChild("Lobby")
 local guide = lobby:WaitForChild("Guide", 30)
@@ -71,32 +70,18 @@ end)
 ------------------------------------------------------------------------------------------
 local marker = UIKit.new("BillboardGui", {
 	Name = "NewMarker",
-	Size = UDim2.fromOffset(46, 46),
+	Size = UDim2.fromOffset(56, 56),
 	StudsOffset = Vector3.new(0, 3.6, 0),
 	AlwaysOnTop = true,
 	LightInfluence = 0,
 	Enabled = false,
 	Parent = head,
 })
--- a cream badge with a red ring and an ink "!", bobbing gently
-local bang = UIKit.new("TextLabel", {
-	Text = "!",
-	FontFace = Face.bold,
-	TextScaled = true,
-	TextColor3 = Colors.ink,
-	BackgroundColor3 = Colors.cream,
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(36, 36),
-	Parent = marker,
-}, {
-	UIKit.corner(18),
-	UIKit.stroke(Colors.accent, 3),
-	UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
-})
+-- a dark glass diamond with an accent glow and a white "!", bobbing gently
+local _, stepMarker = UIKit.alertMarker(marker, UDim2.fromScale(0.5, 0.5), 36)
 RunService.RenderStepped:Connect(function()
 	if marker.Enabled then
-		bang.Position = UDim2.new(0.5, 0, 0.5, math.sin(os.clock() * 3) * 5)
+		stepMarker(os.clock())
 	end
 end)
 

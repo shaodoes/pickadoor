@@ -17,9 +17,9 @@
 	  shell:balanceTarget()              the chip (a UIFx.flyTo target), nil without balance
 	  shell:shake(intensity?, duration?) / shell:flash(color?, strength?)
 
-	Look: a sheet with a warm-wood-to-ink gradient, a brass stroke whose gradient slowly turns (with an
+	Look: a sheet with a charcoal-to-ink glass gradient (UIKit's dark theme), a brass stroke whose gradient slowly turns (with an
 	accent-tinted highlight), a soft accent glow around it, a slowly drifting accent haze inside, and a
-	header with a medallion, title, subtitle, Keys chip, a round close button and an accent rule with a
+	header with a medallion, title, subtitle, Keys chip (with a spinning 3D key), a round close button and an accent rule with a
 	travelling highlight.
 
 	Motion: UIKit.show pops the "Fit" UIScale (registered with UIKit.registerPanel) and plays PanelOpen; on
@@ -35,6 +35,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UI3D = require(Shared.UI3D)
 local UIKit = require(Shared.UIKit)
 local UIFx = require(Shared.UIFx)
 
@@ -45,14 +46,14 @@ local RADIUS = 18
 local INSET = 24
 local TEXT_X = 98 -- title/subtitle left edge (right of the medallion)
 
-local WOOD = Color3.fromRGB(40, 27, 21)
-local INK = Color3.fromRGB(18, 12, 10)
+local WOOD = Color3.fromRGB(32, 36, 48) -- (top of the sheet's gradient: cool charcoal now, the name stuck)
+local INK = Color3.fromRGB(10, 12, 17)
 local BRASS = Colors.gold
 local BRASS_DARK = Color3.fromRGB(150, 112, 56)
 local BRASS_LIGHT = Color3.fromRGB(240, 206, 140)
-local CREAM = Color3.fromRGB(248, 234, 210)
+local CREAM = Colors.paper
 local WHITE = Color3.new(1, 1, 1)
-local CHIP = Color3.fromRGB(22, 15, 12)
+local CHIP = Colors.ink
 local CHIP_HOT = Color3.fromRGB(104, 78, 36)
 local CHIP_COOL = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
@@ -97,6 +98,7 @@ export type Shell = typeof(setmetatable(
 		_sheet: Frame,
 		_chip: Frame?,
 		_amount: TextLabel?,
+		_key: UI3D.Spinner?,
 		_balance: number?,
 		_opened: { () -> () },
 		_closed: { () -> () },
@@ -152,7 +154,7 @@ local function buildMedallion(header: Frame, accent: Color3, iconName: string?, 
 		Parent = holder,
 	}, {
 		circle(),
-		UIKit.new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(52, 36, 28), INK) }),
+		UIKit.new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(44, 50, 66), INK) }),
 		UIKit.new("UIStroke", { Color = accent, Thickness = 2, Transparency = 0.05 }),
 	})
 	UIKit.new("Frame", {
@@ -194,7 +196,7 @@ local function buildClose(header: Frame, frame: Frame): TextButton
 		Name = "Close",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = Color3.fromRGB(30, 21, 17),
+		BackgroundColor3 = Colors.inkSoft,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(1, -(INSET + 20), 0, HEADER / 2),
@@ -219,11 +221,11 @@ local function buildClose(header: Frame, frame: Frame): TextButton
 		stroke = stroke,
 		onEnter = function()
 			UIFx.tween(icon, UIFx.Info.spring, { Rotation = 90 })
-			UIFx.tween(button, UIFx.Info.fast, { BackgroundColor3 = Color3.fromRGB(58, 40, 31) })
+			UIFx.tween(button, UIFx.Info.fast, { BackgroundColor3 = Color3.fromRGB(50, 56, 72) })
 		end,
 		onLeave = function()
 			UIFx.tween(icon, UIFx.Info.smooth, { Rotation = 0 })
-			UIFx.tween(button, UIFx.Info.fast, { BackgroundColor3 = Color3.fromRGB(30, 21, 17) })
+			UIFx.tween(button, UIFx.Info.fast, { BackgroundColor3 = Colors.inkSoft })
 		end,
 	})
 	button.Activated:Connect(function()
@@ -232,8 +234,8 @@ local function buildClose(header: Frame, frame: Frame): TextButton
 	return button
 end
 
--- The Keys balance pill: key icon + amount.
-local function buildChip(header: Frame): (Frame, TextLabel)
+-- The Keys balance pill: a spinning 3D key + amount.
+local function buildChip(header: Frame): (Frame, TextLabel, UI3D.Spinner)
 	local chip = UIKit.new("Frame", {
 		Name = "Balance",
 		BackgroundColor3 = CHIP,
@@ -253,7 +255,7 @@ local function buildChip(header: Frame): (Frame, TextLabel)
 			Transparency = 0.35,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
-		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 16) }),
+		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 16) }),
 		UIKit.new("UIListLayout", {
 			FillDirection = Enum.FillDirection.Horizontal,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -261,9 +263,8 @@ local function buildChip(header: Frame): (Frame, TextLabel)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	local icon = UIKit.icon("key", Colors.goldBright, 20)
-	icon.LayoutOrder = 1
-	icon.Parent = chip
+	local key = UI3D.key(chip, 30, { speed = 1.2, zIndex = 5 })
+	key.viewport.LayoutOrder = 1
 	local amount = UIKit.new("TextLabel", {
 		Name = "Amount",
 		BackgroundTransparency = 1,
@@ -276,7 +277,7 @@ local function buildChip(header: Frame): (Frame, TextLabel)
 		LayoutOrder = 2,
 		Parent = chip,
 	})
-	return chip, amount
+	return chip, amount, key
 end
 
 function Shell.new(gui: ScreenGui, opts: Options): Shell
@@ -455,9 +456,9 @@ function Shell.new(gui: ScreenGui, opts: Options): Shell
 		)
 	end
 
-	local chip, amount = nil, nil
+	local chip, amount, key = nil, nil, nil
 	if opts.balance then
-		chip, amount = buildChip(header)
+		chip, amount, key = buildChip(header)
 		table.insert(revealed, chip)
 	end
 	table.insert(revealed, buildClose(header, frame))
@@ -504,6 +505,7 @@ function Shell.new(gui: ScreenGui, opts: Options): Shell
 		_sheet = sheet,
 		_chip = chip,
 		_amount = amount,
+		_key = key,
 		_balance = nil,
 		_opened = {},
 		_closed = {},
@@ -564,7 +566,8 @@ function Shell.onClosed(self: Shell, fn: () -> ())
 end
 
 -- Show `keys` in the header chip. With `animate` the number counts from the previous value, and a
--- rise gives the chip a little pop + gold flash. No-op when the shell has no balance chip.
+-- rise gives the chip a little pop + gold flash and spins its 3D key up. No-op when the shell has no
+-- balance chip.
 function Shell.setBalance(self: Shell, keys: number, animate: boolean?)
 	local chip, amount = self._chip, self._amount
 	if not chip or not amount then
@@ -574,6 +577,9 @@ function Shell.setBalance(self: Shell, keys: number, animate: boolean?)
 	self._balance = keys
 	if animate and previous ~= nil and previous ~= keys then
 		UIFx.countUp(amount, previous, keys, 0.8)
+		if self._key then
+			self._key:kick(if keys > previous then 16 else 6)
+		end
 		if keys > previous then
 			local scale = UIFx.scaleOf(chip)
 			scale.Scale = 1.16

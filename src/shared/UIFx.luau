@@ -26,8 +26,10 @@
 	  UIFx.fill(bar, alpha, duration)                     bar.Size.X.Scale -> alpha
 	  UIFx.burst(parent, origin, {count, colors, spread, size})   sparkle burst (diamonds + streaks + ring)
 	  UIFx.confetti(parent, {count, colors, duration})    confetti tumbling down across parent
-	  UIFx.flyUp(parent, origin, text, {color, icon, size})        "+150 [key]" rising and fading
-	  UIFx.flyTo(parent, from, to, {count, icon, color, onArrive}) icons arcing from `from` to `to`
+	  UIFx.flyUp(parent, origin, text, {color, icon, size})        "+150 [key]" rising and fading (the key is
+	                                                      a spinning 3D one; a light sweeps the number)
+	  UIFx.flyTo(parent, from, to, {count, icon, color, onArrive}) icons arcing from `from` to `to` (keys flip
+	                                                      edge-on as they fly, like spinning coins)
 	  UIFx.shake(obj, intensity, duration)                Position jitter, restored exactly
 	  UIFx.flash(parent, color, strength, duration)       colour flash over parent
 	  UIFx.stamp(obj)                                     slam-in with a soft thump
@@ -41,7 +43,8 @@
 	- reveal/shake remember an object's resting Position in the attribute "FxRestPos" the first time, so
 	  repeated calls never drift. If you move such an object on purpose later, call UIFx.setRest(obj, newPos).
 	  Children of a UIListLayout/UIGridLayout ignore Position: they still get the scale (and fade) part.
-	- Fades need a CanvasGroup (reveal/stamp fade GroupTransparency if obj is one). Keep CanvasGroups small.
+	- Fades need a CanvasGroup (reveal/stamp fade GroupTransparency if obj is one). Keep CanvasGroups small, and
+	  don't put a UI3D spinner (a ViewportFrame) inside one.
 	- shine/flash/burst/confetti/flyUp/flyTo add a child frame to obj/parent: don't target an object that
 	  has a UIListLayout/UIGridLayout (the layout would arrange the effect as an item); target its container.
 	- Don't use hover() on a UIKit.button: it already has its own hover/press animation and sounds.
@@ -49,6 +52,7 @@
 local RunService = game:GetService("RunService")
 
 local Sfx = require(script.Parent.Sfx)
+local UI3D = require(script.Parent.UI3D)
 local UIKit = require(script.Parent.UIKit)
 
 local Colors = UIKit.Colors
@@ -768,7 +772,7 @@ end
 
 export type FlyUpOpts = { color: Color3?, icon: string?, size: number? }
 
--- Pass icon = "none" for text only (the default icon is the key).
+-- Pass icon = "none" for text only (the default icon is the key, shown as a spinning 3D key).
 function UIFx.flyUp(parent: GuiBase2d, origin: UDim2, text: string, opts: FlyUpOpts?)
 	if not alive(parent) then
 		return
@@ -778,7 +782,8 @@ function UIFx.flyUp(parent: GuiBase2d, origin: UDim2, text: string, opts: FlyUpO
 	local size = o.size or 34
 	local iconName = o.icon or "key"
 
-	local group = UIKit.new("CanvasGroup", {
+	-- (a plain Frame, not a CanvasGroup: the 3D key's ViewportFrame has to render; pieces fade one by one)
+	local group = UIKit.new("Frame", {
 		Name = "FxFlyUp",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -803,23 +808,56 @@ function UIFx.flyUp(parent: GuiBase2d, origin: UDim2, text: string, opts: FlyUpO
 		Text = text,
 		FontFace = UIKit.Face.bold,
 		TextSize = size,
-		TextColor3 = color,
+		TextColor3 = Color3.new(1, 1, 1), -- the gradient below carries the colour
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromOffset(0, size + 4),
 		LayoutOrder = 1,
+		ZIndex = 55,
 		Parent = group,
 	})
-	UIKit.new("UIStroke", {
+	-- a bright band sweeps across the number once, like light catching metal
+	local sweep = UIKit.new("UIGradient", {
+		Rotation = 15,
+		Offset = Vector2.new(-1, 0),
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, color),
+			ColorSequenceKeypoint.new(0.42, color),
+			ColorSequenceKeypoint.new(0.5, color:Lerp(Color3.new(1, 1, 1), 0.85)),
+			ColorSequenceKeypoint.new(0.58, color),
+			ColorSequenceKeypoint.new(1, color),
+		}),
+		Parent = label,
+	})
+	tween(sweep, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.12), {
+		Offset = Vector2.new(1, 0),
+	})
+	local outline = UIKit.new("UIStroke", {
 		Color = Colors.shadow,
 		Thickness = 2,
 		Transparency = 0.25,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
 		Parent = label,
 	})
-	if iconName ~= "none" then
+
+	local fade = TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.65)
+	if iconName == "key" then
+		local key = UI3D.key(group, math.floor(size * 1.15), { speed = 5, tilt = 0.2, zIndex = 55 })
+		key.viewport.LayoutOrder = 2
+		key:kick(18)
+		tween(key.viewport, fade, { ImageTransparency = 1 })
+	elseif iconName ~= "none" then
 		local icon = UIKit.icon(iconName, color, math.floor(size * 0.8))
 		icon.LayoutOrder = 2
 		icon.Parent = group
+		for _, d in icon:GetDescendants() do
+			if d:IsA("Frame") and d.BackgroundTransparency < 1 then
+				tween(d, fade, { BackgroundTransparency = 1 })
+			elseif d:IsA("UIStroke") then
+				tween(d, fade, { Transparency = 1 })
+			elseif d:IsA("TextLabel") then
+				tween(d, fade, { TextTransparency = 1 })
+			end
+		end
 	end
 
 	local scale = UIKit.new("UIScale", { Name = "FxScale", Scale = 0.4, Parent = group })
@@ -829,11 +867,8 @@ function UIFx.flyUp(parent: GuiBase2d, origin: UDim2, text: string, opts: FlyUpO
 		TweenInfo.new(1.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 		{ Position = origin + UDim2.fromOffset(0, -70) }
 	)
-	tween(
-		group,
-		TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.65),
-		{ GroupTransparency = 1 }
-	)
+	tween(label, fade, { TextTransparency = 1 })
+	tween(outline, fade, { Transparency = 1 })
 	destroyLater(group, 1.3)
 end
 
@@ -869,6 +904,7 @@ function UIFx.flyTo(parent: GuiBase2d, from: GuiBase2d, to: GuiBase2d, opts: Fly
 	local count = math.clamp(math.floor(o.count or 6), 1, 12)
 	local color = o.color or Colors.goldBright
 	local iconName = o.icon or "key"
+	local flips = iconName == "key"
 	local holder = holderIn(parent, "FxFlyTo", 60)
 
 	local dx, dy = b.X - a.X, b.Y - a.Y
@@ -924,6 +960,11 @@ function UIFx.flyTo(parent: GuiBase2d, from: GuiBase2d, to: GuiBase2d, opts: Fly
 					icon.Visible = true
 					icon.Position = UDim2.fromScale(x / pw, y / ph)
 					icon.Rotation = math.sin(u * math.pi) * 25
+					if flips then
+						-- squash the width with a cosine: the key turns edge-on and back, like a spinning coin
+						local w = math.max(math.abs(math.cos(u * math.pi * 3 + i)), 0.12)
+						icon.Size = UDim2.fromOffset(26 * w, 26)
+					end
 				end
 			end
 		end

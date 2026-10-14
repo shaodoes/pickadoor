@@ -33,11 +33,11 @@ local DAYS = #Rewards.Daily
 local ACCENT = Rewards.Stations.Daily.color
 
 -- palette for the dark cards
-local FACE_BASE = Color3.fromRGB(62, 44, 34)
+local FACE_BASE = Color3.fromRGB(40, 45, 58)
 local FACE_TODAY = Color3.fromRGB(104, 74, 46)
 local FACE_CLAIMED = Color3.fromRGB(40, 50, 36)
 local CLAIMED_GREEN = Color3.fromRGB(112, 190, 104)
-local TRACK = Color3.fromRGB(20, 13, 10)
+local TRACK = Color3.fromRGB(10, 12, 17)
 
 -- layout (design px inside shell.content, ~812 wide)
 local ROW_Y = 12 -- leaves room for the TODAY pill hanging over the cards' top edge

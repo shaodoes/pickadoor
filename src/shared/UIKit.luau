@@ -1,54 +1,89 @@
--- Small helpers for code-built UI with the basement-library look: warm cream paper, dark ink,
--- a muted red accent, chunky condensed type (Oswald) and soft drop shadows.
--- Buttons get springy hover/press animation and sounds; panels pop open and closed; toasts slide in.
+-- Small helpers for code-built UI with the "night archive" look: dark charcoal glass panels with a
+-- faint top-lit gradient, crisp off-white type, one cold spectral-teal accent, and warm gold kept
+-- for Keys / currency only. Thin 1px strokes, generous corner radii, soft glows and drop shadows.
+-- Buttons get springy hover/press animation with a little parallax tilt, and sounds; panels pop open
+-- and closed; toasts slide in.
 -- Everything is sized for a ~1280x720 screen and scaled to fit by UIKit.fit (phones get smaller UI).
+--
+-- Token names are kept from the older cream/ink "paper" theme so existing scripts keep working; their
+-- meaning in the dark theme: `ink*` = dark surfaces (and dark text on bright faces), `paper*` = light
+-- text/icons on those surfaces, `cream` = the bright primary (teal) face, `accent` = the teal accent.
+local GuiService = game:GetService("GuiService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Sfx = require(script.Parent.Sfx)
 
 local UIKit = {}
 
 UIKit.Colors = {
-	-- paper surfaces (panels, dialogue, rows)
-	paper = Color3.fromRGB(243, 232, 212),
-	paperLight = Color3.fromRGB(252, 246, 234),
-	paperDark = Color3.fromRGB(224, 207, 180),
-	cream = Color3.fromRGB(246, 224, 192), -- the PICK A DOOR pill
-	creamHot = Color3.fromRGB(236, 168, 140),
-	-- ink (text on paper, dark buttons, HUD cards)
-	ink = Color3.fromRGB(46, 31, 24),
-	inkSoft = Color3.fromRGB(74, 54, 42),
-	inkMuted = Color3.fromRGB(122, 98, 80),
-	shadow = Color3.fromRGB(12, 7, 5),
-	-- accents
-	accent = Color3.fromRGB(158, 52, 44),
-	accentDark = Color3.fromRGB(116, 36, 32),
-	-- legacy keys (the Trial overlay uses these on top of the 3D world)
-	bg = Color3.fromRGB(28, 19, 15),
-	panel = Color3.fromRGB(46, 31, 24),
-	panelLight = Color3.fromRGB(74, 54, 42),
-	gold = Color3.fromRGB(214, 172, 104),
-	goldBright = Color3.fromRGB(255, 214, 140),
-	text = Color3.fromRGB(246, 234, 214),
-	muted = Color3.fromRGB(176, 154, 128),
-	red = Color3.fromRGB(158, 52, 44),
-	green = Color3.fromRGB(78, 118, 76),
+	-- light text / icons on the dark surfaces (were: the cream paper sheets)
+	paper = Color3.fromRGB(232, 236, 243),
+	paperLight = Color3.fromRGB(248, 250, 253),
+	paperDark = Color3.fromRGB(46, 51, 64), -- dim fills: empty meter segments, muted buttons, idle pips
+	-- the primary face (the PICK A DOOR pill) and its "hot" (queued / warning) variant
+	cream = Color3.fromRGB(94, 232, 210),
+	creamHot = Color3.fromRGB(255, 112, 118),
+	-- dark surfaces (HUD cards, dark buttons) and dark text on bright faces
+	ink = Color3.fromRGB(14, 16, 22),
+	inkSoft = Color3.fromRGB(30, 34, 45),
+	inkMuted = Color3.fromRGB(126, 136, 156), -- secondary text, disabled icons
+	shadow = Color3.fromRGB(2, 3, 6),
+	-- the one cool accent
+	accent = Color3.fromRGB(45, 212, 191),
+	accentDark = Color3.fromRGB(14, 92, 88),
+	accentGlow = Color3.fromRGB(130, 255, 236),
+	-- glass surfaces (panels, dialogue, rows) and hairline strokes
+	glass = Color3.fromRGB(12, 14, 20),
+	glassRaised = Color3.fromRGB(26, 30, 40),
+	line = Color3.fromRGB(255, 255, 255),
+	-- status
+	danger = Color3.fromRGB(240, 84, 98),
+	success = Color3.fromRGB(52, 196, 132),
+	-- Keys / currency only
+	key = Color3.fromRGB(236, 188, 96),
+	keyBright = Color3.fromRGB(255, 220, 132),
+	-- legacy keys (the Trial overlay and the reward panels use these)
+	bg = Color3.fromRGB(8, 9, 13),
+	panel = Color3.fromRGB(14, 16, 22),
+	panelLight = Color3.fromRGB(30, 34, 45),
+	gold = Color3.fromRGB(236, 188, 96),
+	goldBright = Color3.fromRGB(255, 220, 132),
+	text = Color3.fromRGB(232, 236, 243),
+	muted = Color3.fromRGB(148, 157, 176),
+	red = Color3.fromRGB(240, 84, 98),
+	green = Color3.fromRGB(52, 178, 124),
 }
 local C = UIKit.Colors
 
+-- Non-colour theme numbers: glass opacity, hairline stroke transparency, corner radii.
+UIKit.Theme = {
+	glassAlpha = 0.1, -- BackgroundTransparency of glass cards / HUD
+	sheetAlpha = 0.04, -- ... of big sheets (panels, dialogue) that carry a lot of text
+	lineAlpha = 0.86, -- 1px hairline stroke transparency
+	radius = 12,
+	radiusLarge = 18,
+}
+local Theme = UIKit.Theme
+
+-- Legacy Enum.Font picks (UIKit.label); the FontFaces below are what the UI actually uses.
 UIKit.Fonts = {
-	title = Enum.Font.Garamond,
-	body = Enum.Font.Garamond,
-	ui = Enum.Font.Oswald,
+	title = Enum.Font.GothamBold,
+	body = Enum.Font.Gotham,
+	ui = Enum.Font.GothamMedium,
 }
 
--- FontFaces for the redesigned UI
+-- FontFaces. `bold` / `semi` stay Oswald (condensed caps: the reward panels' fixed layouts are sized
+-- for it); `display` / `ui` are the clean BuilderSans faces for the HUD, buttons and panel titles.
 UIKit.Face = {
 	bold = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Bold),
 	semi = Font.new("rbxasset://fonts/families/Oswald.json", Enum.FontWeight.Medium),
 	body = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium),
 	bodyBold = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold),
 	serif = Font.new("rbxasset://fonts/families/Merriweather.json", Enum.FontWeight.Regular),
+	display = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.ExtraBold),
+	ui = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold),
+	uiSemi = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.SemiBold),
 }
 local Face = UIKit.Face
 
@@ -101,14 +136,63 @@ function UIKit.padding(px: number)
 	return UIKit.new("UIPadding", { PaddingTop = u, PaddingBottom = u, PaddingLeft = u, PaddingRight = u })
 end
 
--- Soft top-lit sheen: the top of a surface catches the lamp light.
+-- Soft top-lit sheen: the top of a surface catches the light, the bottom falls off a little cooler.
 function UIKit.sheen(strength: number?)
 	local s = strength or 1
-	local low = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(205, 192, 178), s)
+	local low = Color3.new(1, 1, 1):Lerp(Color3.fromRGB(150, 158, 178), s)
 	return UIKit.new("UIGradient", {
 		Rotation = 90,
 		Color = ColorSequence.new(Color3.new(1, 1, 1), low),
 	})
+end
+
+-- A 1px hairline stroke in the theme's line colour.
+function UIKit.hairline(transparency: number?, color: Color3?)
+	return UIKit.stroke(color or C.line, 1, transparency or Theme.lineAlpha)
+end
+
+export type GlassOpts = {
+	radius: number?,
+	color: Color3?, -- surface colour (default Colors.glass)
+	alpha: number?, -- BackgroundTransparency (default Theme.glassAlpha)
+	line: number?, -- hairline transparency (default Theme.lineAlpha); pass 1 for none
+	tint: Color3?, -- colour the lower edge of the gradient leans toward (default a cool grey-blue)
+	flat: boolean?, -- no gradient (a UIGradient on a TextLabel would tint its text too)
+}
+
+-- Turn `obj` into a dark glass card: translucent surface, a diagonal top-lit UIGradient, a
+-- rounded corner and a 1px hairline. Replaces any UICorner / UIStroke / UIGradient obj already has.
+-- (On a TextLabel / TextButton pass flat = true: a UIGradient tints the text as well.)
+function UIKit.glass(obj: GuiObject, opts: GlassOpts?): GuiObject
+	local o: GlassOpts = opts or {}
+	for _, child in obj:GetChildren() do
+		if child:IsA("UICorner") or child:IsA("UIStroke") or child:IsA("UIGradient") then
+			child:Destroy()
+		end
+	end
+	obj.BackgroundColor3 = o.color or C.glass
+	obj.BackgroundTransparency = o.alpha or Theme.glassAlpha
+	obj.BorderSizePixel = 0
+	UIKit.corner(o.radius or Theme.radius).Parent = obj
+	if (o.line or Theme.lineAlpha) < 1 then
+		UIKit.hairline(o.line).Parent = obj
+	end
+	if o.flat then
+		return obj
+	end
+	-- UIGradient colours multiply the surface: lift the top-left a touch so the card reads as lit glass
+	local top = Color3.fromRGB(255, 255, 255)
+	local tint = o.tint or Color3.fromRGB(186, 198, 222)
+	UIKit.new("UIGradient", {
+		Rotation = 70,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, top),
+			ColorSequenceKeypoint.new(0.45, tint),
+			ColorSequenceKeypoint.new(1, tint:Lerp(Color3.new(), 0.25)),
+		}),
+		Parent = obj,
+	})
+	return obj
 end
 
 function UIKit.label(props: { [string]: any })
@@ -209,6 +293,109 @@ function UIKit.shadow(holder: GuiObject, radius: number, depth: number?, strengt
 		}, { UIKit.corner(radius + spec.grow / 2) })
 	end
 	return folder
+end
+
+-- A soft coloured halo behind an element (like shadow(), a sibling of the face, so it goes in
+-- `holder`): three stacked translucent rounded frames that grow outward. Centre-anchored, so a UIScale
+-- on it (UIFx.pulse) breathes it in place.
+function UIKit.glow(holder: GuiObject, radius: number, color: Color3?, strength: number?)
+	local k = strength or 1
+	local folder = UIKit.new("Frame", {
+		Name = "Glow",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 0,
+		Parent = holder,
+	})
+	for i, spec in { { grow = 34, alpha = 0.95 }, { grow = 18, alpha = 0.9 }, { grow = 6, alpha = 0.82 } } do
+		UIKit.new("Frame", {
+			Name = "Layer" .. i,
+			BackgroundColor3 = color or C.accent,
+			BackgroundTransparency = 1 - (1 - spec.alpha) * k,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 2),
+			Size = UDim2.new(1, spec.grow, 1, spec.grow),
+			ZIndex = 0,
+			Parent = folder,
+		}, { UIKit.corner(radius + spec.grow / 2) })
+	end
+	return folder
+end
+
+------------------------------------------------------------------------------------------
+-- NPC / station marker
+------------------------------------------------------------------------------------------
+-- The "something waiting here" marker floated over NPCs and reward stations (in a BillboardGui): a
+-- dark glass diamond with a rim and halo in `color` (default: the accent) and a white "!". Returns
+-- the holder and step(t), which bobs it around `position`, breathes the halo and rocks the diamond a
+-- little; call it every frame only while the marker is showing.
+function UIKit.alertMarker(parent: Instance, position: UDim2, size: number?, color: Color3?): (Frame, (t: number) -> ())
+	local s = size or 34
+	local tint = color or C.accent -- rim and halo (e.g. the station's own colour)
+	local d = math.floor(s * 0.72) -- the diamond's side (its diagonal is ~s)
+	local holder = UIKit.new("Frame", {
+		Name = "Alert",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = position,
+		Size = UDim2.fromOffset(s, s),
+		Parent = parent,
+	})
+	local halos = {}
+	for i, spec in { { grow = 16, alpha = 0.86 }, { grow = 7, alpha = 0.7 } } do
+		halos[i] = UIKit.new("Frame", {
+			Name = "Halo" .. i,
+			BackgroundColor3 = tint,
+			BackgroundTransparency = spec.alpha,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(d + spec.grow, d + spec.grow),
+			Rotation = 45,
+			Parent = holder,
+		}, { UIKit.corner(6 + spec.grow / 2) })
+	end
+	local diamond = UIKit.new("Frame", {
+		Name = "Diamond",
+		BackgroundColor3 = C.ink,
+		BackgroundTransparency = 0.04,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(d, d),
+		Rotation = 45,
+		ZIndex = 2,
+		Parent = holder,
+	}, {
+		UIKit.corner(6),
+		UIKit.stroke(tint, 1.5, 0),
+		UIKit.new("UIGradient", {
+			Rotation = 45, -- (in the diamond's frame: lit from the top corner)
+			Color = ColorSequence.new(Color3.fromRGB(150, 168, 190), Color3.new(1, 1, 1)),
+		}),
+	})
+	UIKit.new("TextLabel", {
+		Name = "Bang",
+		Text = "!",
+		FontFace = Face.display,
+		TextSize = math.floor(s * 0.62),
+		TextColor3 = C.paperLight,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 3,
+		Parent = holder,
+	})
+	local function step(t: number)
+		holder.Position = position + UDim2.fromOffset(0, math.sin(t * 3) * 5)
+		diamond.Rotation = 45 + math.sin(t * 1.7) * 5
+		local breathe = 0.5 + 0.5 * math.sin(t * 4)
+		halos[1].BackgroundTransparency = 0.9 - 0.06 * breathe
+		halos[2].BackgroundTransparency = 0.76 - 0.1 * breathe
+	end
+	return holder, step
 end
 
 ------------------------------------------------------------------------------------------
@@ -586,18 +773,42 @@ end
 ------------------------------------------------------------------------------------------
 -- Buttons
 ------------------------------------------------------------------------------------------
--- Colour schemes: face colour, text/icon colour, trim colour + trim transparency.
+-- Colour schemes: face colour, text/icon colour, trim colour + trim transparency, and optionally the
+-- face's BackgroundTransparency (`alpha`: glass buttons) and a halo colour (`glow`: the primary).
 UIKit.Styles = {
-	cream = { face = C.cream, text = C.ink, trim = C.ink, trimAlpha = 0.8 },
-	ink = { face = C.ink, text = C.paper, trim = C.paper, trimAlpha = 0.86 },
-	accent = { face = C.accent, text = C.paperLight, trim = C.accentDark, trimAlpha = 0.4 },
-	paper = { face = C.paperLight, text = C.ink, trim = C.ink, trimAlpha = 0.78 },
-	green = { face = C.green, text = C.paperLight, trim = C.ink, trimAlpha = 0.7 },
-	muted = { face = C.paperDark, text = C.inkMuted, trim = C.ink, trimAlpha = 0.85 },
+	cream = { face = C.cream, text = C.ink, trim = C.accentGlow, trimAlpha = 0.45, glow = C.accent },
+	ink = { face = C.ink, text = C.paper, trim = C.line, trimAlpha = 0.84, alpha = 0.12 },
+	accent = { face = C.accent, text = C.ink, trim = C.accentGlow, trimAlpha = 0.5 },
+	paper = { face = C.inkSoft, text = C.paper, trim = C.line, trimAlpha = 0.82, alpha = 0.06 },
+	green = { face = C.green, text = C.paperLight, trim = C.line, trimAlpha = 0.72 },
+	muted = { face = C.paperDark, text = C.inkMuted, trim = C.line, trimAlpha = 0.9 },
+	danger = { face = C.danger, text = C.paperLight, trim = C.line, trimAlpha = 0.72 },
 }
+-- clearer names for new code (same tables)
+UIKit.Styles.primary = UIKit.Styles.cream
+UIKit.Styles.glass = UIKit.Styles.ink
 
--- Hover: springs up a touch and lightens. Press: squashes and sinks onto its shadow. Click: sound.
--- Works on UIKit.button()s (which have a Face) and on plain GuiButtons.
+local TILT = 3 -- degrees a hovered face leans toward the pointer
+local PARALLAX = Vector2.new(4, 3) -- px it drifts toward the pointer (its shadow drifts away)
+
+-- The pointer's position over `obj` as -0.5..0.5 on each axis (nil if obj has no size yet).
+local function pointerIn(obj: GuiObject): Vector2?
+	local size = obj.AbsoluteSize
+	if size.X < 1 or size.Y < 1 then
+		return nil
+	end
+	local mouse = UserInputService:GetMouseLocation()
+	local gui = obj:FindFirstAncestorWhichIsA("ScreenGui")
+	if not (gui and gui.IgnoreGuiInset) then
+		mouse -= GuiService:GetGuiInset()
+	end
+	local rel = (mouse - obj.AbsolutePosition) / size - Vector2.new(0.5, 0.5)
+	return Vector2.new(math.clamp(rel.X, -0.5, 0.5), math.clamp(rel.Y, -0.5, 0.5))
+end
+
+-- Hover: springs up a touch, lightens, and the face leans toward the pointer (a tilt plus a little
+-- parallax against its shadow, so it reads as a raised tile). Press: squashes and sinks onto its
+-- shadow. Click: sound. Works on UIKit.button()s (which have a Face) and on plain GuiButtons.
 function UIKit.animate(button: GuiButton, baseColor: Color3?)
 	local scale = button:FindFirstChildOfClass("UIScale") or UIKit.new("UIScale", { Parent = button })
 	local face = button:FindFirstChild("Face") :: GuiObject?
@@ -606,8 +817,34 @@ function UIKit.animate(button: GuiButton, baseColor: Color3?)
 	local strokeAlpha = stroke and stroke.Transparency
 	local color = baseColor or surface.BackgroundColor3
 	local faceRest = face and face.Position
+	local shadow = face and button:FindFirstChild("Shadow") :: GuiObject?
+	local shadowRest = shadow and shadow.Position
 	button.AutoButtonColor = false
 	local hovering, pressed = false, false
+	local settling: { Tween } = {}
+
+	local function stopSettling()
+		for _, t in settling do
+			t:Cancel()
+		end
+		table.clear(settling)
+	end
+
+	-- place the face (and its shadow) for a pointer at `rel` (nil = centred)
+	local function lean(rel: Vector2?)
+		if not (face and faceRest) then
+			return
+		end
+		stopSettling()
+		local r = rel or Vector2.zero
+		local sink = if pressed then 2 else 0
+		face.Position = faceRest + UDim2.fromOffset(math.round(r.X * PARALLAX.X), math.round(r.Y * PARALLAX.Y) + sink)
+		face.Rotation = r.X * TILT
+		if shadow and shadowRest then
+			shadow.Position = shadowRest
+				+ UDim2.fromOffset(math.round(-r.X * PARALLAX.X), math.round(-r.Y * PARALLAX.Y * 0.5))
+		end
+	end
 
 	local function rest()
 		tween(scale, hovering and SPRING or FAST, { Scale = hovering and 1.06 or 1 })
@@ -615,14 +852,25 @@ function UIKit.animate(button: GuiButton, baseColor: Color3?)
 		if stroke and strokeAlpha then
 			tween(stroke, FAST, { Transparency = hovering and math.max(strokeAlpha - 0.3, 0) or strokeAlpha })
 		end
-		if face and faceRest then
-			tween(face, FAST, { Position = faceRest })
+		if hovering and UserInputService.MouseEnabled then
+			lean(pointerIn(button))
+		elseif face and faceRest then
+			stopSettling()
+			table.insert(settling, tween(face, SPRING, { Position = faceRest, Rotation = 0 }))
+			if shadow and shadowRest then
+				table.insert(settling, tween(shadow, SPRING, { Position = shadowRest }))
+			end
 		end
 	end
 	button.MouseEnter:Connect(function()
 		hovering = true
 		Sfx.play("Hover", 0.08)
 		rest()
+	end)
+	button.MouseMoved:Connect(function()
+		if hovering and UserInputService.MouseEnabled then
+			lean(pointerIn(button))
+		end
 	end)
 	button.MouseLeave:Connect(function()
 		hovering = false
@@ -632,9 +880,7 @@ function UIKit.animate(button: GuiButton, baseColor: Color3?)
 	button.MouseButton1Down:Connect(function()
 		pressed = true
 		tween(scale, FAST, { Scale = 0.94 })
-		if face and faceRest then
-			tween(face, FAST, { Position = faceRest + UDim2.fromOffset(0, 2) })
-		end
+		lean(if hovering and UserInputService.MouseEnabled then pointerIn(button) else nil)
 	end)
 	button.MouseButton1Up:Connect(function()
 		if pressed then
@@ -671,15 +917,17 @@ export type ButtonOptions = {
 	radius: number?,
 	depth: number?, -- shadow drop in px
 	tooltip: string?, -- shown above the button on hover (good for icon-only buttons)
+	glow: boolean?, -- false hides the style's halo (the primary style has one)
 }
 
--- A chunky button: an invisible hit box holding a shadow and a rounded Face with icon + text.
--- The button's own Text property still holds the caption (set it as usual; the face follows).
+-- A chunky button: an invisible hit box holding a shadow (and, for the primary style, a soft accent
+-- halo) and a rounded Face with icon + text. The button's own Text property still holds the caption
+-- (set it as usual; the face follows).
 -- `props` may include BackgroundColor3 / TextColor3 / FontFace / TextSize to override the style.
 function UIKit.button(text: string, props: { [string]: any }?, options: ButtonOptions?)
 	local opts: ButtonOptions = options or {}
 	local style = UIKit.Styles[opts.style or "ink"] or UIKit.Styles.ink
-	local radius = opts.radius or 10
+	local radius = opts.radius or Theme.radius
 
 	local buttonProps = {
 		Text = text,
@@ -707,18 +955,22 @@ function UIKit.button(text: string, props: { [string]: any }?, options: ButtonOp
 		end
 	end
 	local button = UIKit.new("TextButton", buttonProps)
+	if style.glow and opts.glow ~= false then
+		UIKit.glow(button, radius, style.glow, 1)
+	end
 	UIKit.shadow(button, radius, opts.depth or 3, 0.9)
 	local face = UIKit.new("Frame", {
 		Name = "Face",
 		BackgroundColor3 = faceColor,
+		BackgroundTransparency = style.alpha or 0,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		Parent = button,
 	}, {
 		UIKit.corner(radius),
-		UIKit.stroke(style.trim, 1.5, style.trimAlpha),
-		UIKit.sheen(0.6),
+		UIKit.stroke(style.trim, 1, style.trimAlpha),
+		UIKit.sheen(0.45),
 	})
 
 	local content = UIKit.new("Frame", {
@@ -771,26 +1023,27 @@ function UIKit.button(text: string, props: { [string]: any }?, options: ButtonOp
 	return UIKit.animate(button)
 end
 
--- Little ink tag above a button while hovered (or briefly after a tap on touch screens).
+-- Little glass tag above a button while hovered (or briefly after a tap on touch screens).
 function UIKit.tooltip(button: GuiButton, text: string)
 	local tip = UIKit.new("TextLabel", {
 		Name = "Tooltip",
 		Text = text,
-		FontFace = Face.semi,
+		FontFace = Face.uiSemi,
 		TextSize = 15,
 		TextColor3 = C.paper,
-		BackgroundColor3 = C.ink,
-		BackgroundTransparency = 0.05,
+		BackgroundColor3 = C.glass,
+		BackgroundTransparency = 0.04,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 0, -8),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromOffset(0, 24),
+		Size = UDim2.fromOffset(0, 26),
 		Visible = false,
 		ZIndex = 10,
 		Parent = button,
 	}, {
-		UIKit.corner(6),
-		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
+		UIKit.corner(8),
+		UIKit.hairline(0.8),
+		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
 	})
 	local token, hovering = 0, false
 	button.MouseEnter:Connect(function()
@@ -899,10 +1152,12 @@ end)
 
 local HEADER = 58
 
--- Centered modal panel: a sheet of cream paper with an ink header band and a red rule.
+-- Centered modal panel: a sheet of dark glass with a faintly lit header strip and a thin accent
+-- rule that fades out to the right.
 -- Returns the frame (named <title>Panel) and the content area beneath the header.
 -- Open/close it with UIKit.show / UIKit.hide / UIKit.toggle so it animates.
 function UIKit.panel(parent: Instance, title: string, size: UDim2)
+	local R = Theme.radiusLarge
 	local frame = UIKit.new("Frame", {
 		Name = title .. "Panel",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -922,30 +1177,32 @@ function UIKit.panel(parent: Instance, title: string, size: UDim2)
 		Size = UDim2.fromScale(1, 1),
 		Parent = frame,
 	})
-	UIKit.shadow(body, 16, 8, 1)
+	UIKit.glow(body, R, C.accent, 0.35)
+	UIKit.shadow(body, R, 10, 1)
 	local sheet = UIKit.new("Frame", {
 		Name = "Sheet",
-		BackgroundColor3 = C.paper,
-		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		Parent = body,
-	}, { UIKit.corner(16), UIKit.stroke(C.ink, 2, 0.35), UIKit.sheen(0.35) })
+	})
+	UIKit.glass(sheet, { radius = R, alpha = Theme.sheetAlpha, line = 0.8 })
 
-	-- ink header band (rounded top, square bottom) with a red rule beneath it
+	-- header: a barely-lit strip (rounded top, square bottom) with an accent rule beneath it
 	local header = UIKit.new("Frame", {
 		Name = "Header",
-		BackgroundColor3 = C.ink,
+		BackgroundColor3 = C.line,
+		BackgroundTransparency = 0.965,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, HEADER),
 		Parent = sheet,
-	}, { UIKit.corner(16) })
+	}, { UIKit.corner(R) })
 	UIKit.new("Frame", {
 		Name = "Square",
-		BackgroundColor3 = C.ink,
+		BackgroundColor3 = C.line,
+		BackgroundTransparency = 0.965,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 0, 1, -16),
-		Size = UDim2.new(1, 0, 0, 16),
+		Position = UDim2.new(0, 0, 1, -R),
+		Size = UDim2.new(1, 0, 0, R),
 		Parent = header,
 	})
 	UIKit.new("Frame", {
@@ -953,16 +1210,24 @@ function UIKit.panel(parent: Instance, title: string, size: UDim2)
 		BackgroundColor3 = C.accent,
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.new(1, 0, 0, 4),
+		Size = UDim2.new(1, 0, 0, 2),
 		Parent = header,
+	}, {
+		UIKit.new("UIGradient", {
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.35, 0.4),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+		}),
 	})
 	UIKit.new("TextLabel", {
 		Name = "Title",
 		BackgroundTransparency = 1,
 		Text = string.upper(title),
-		FontFace = Face.bold,
-		TextSize = 30,
-		TextColor3 = C.paper,
+		FontFace = Face.display,
+		TextSize = 28,
+		TextColor3 = C.paperLight,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(24, 0),
 		Size = UDim2.new(1, -90, 1, 0),
@@ -977,7 +1242,7 @@ function UIKit.panel(parent: Instance, title: string, size: UDim2)
 		Size = UDim2.fromOffset(36, 36),
 		ZIndex = 3,
 		Parent = header,
-	}, { style = "accent", icon = "close", iconSize = 14, radius = 18, depth = 2 })
+	}, { style = "ink", icon = "close", iconSize = 12, radius = 18, depth = 2 })
 	close.Activated:Connect(function()
 		UIKit.hide(frame)
 	end)
@@ -1024,7 +1289,7 @@ function UIKit.hoverRow(row: GuiObject)
 	local stroke = row:FindFirstChildOfClass("UIStroke")
 	local strokeAlpha = stroke and stroke.Transparency
 	row.MouseEnter:Connect(function()
-		tween(row, FAST, { BackgroundColor3 = baseColor:Lerp(Color3.new(1, 1, 1), 0.35) })
+		tween(row, FAST, { BackgroundColor3 = baseColor:Lerp(Color3.new(1, 1, 1), 0.07) })
 		if stroke and strokeAlpha then
 			tween(stroke, FAST, { Transparency = math.max(strokeAlpha - 0.25, 0) })
 		end
@@ -1043,7 +1308,7 @@ end
 local toastHolders: { [ScreenGui]: Frame } = {}
 local TOAST_W = 460
 
--- kind: nil (neutral), "error" (red tab + buzz) or "success" (green tab + chime)
+-- kind: nil (neutral: accent tab), "error" (red tab + buzz) or "success" (green tab + chime)
 function UIKit.toast(screenGui: ScreenGui, text: string, kind: string?)
 	local holder = toastHolders[screenGui]
 	if not holder or holder.Parent ~= screenGui then
@@ -1065,7 +1330,7 @@ function UIKit.toast(screenGui: ScreenGui, text: string, kind: string?)
 		UIKit.fit(holder)
 		toastHolders[screenGui] = holder
 	end
-	local tab = kind == "error" and C.accent or kind == "success" and C.green or C.gold
+	local tab = kind == "error" and C.danger or kind == "success" and C.success or C.accent
 	if kind == "error" then
 		Sfx.play("Error")
 	elseif kind == "success" then
@@ -1091,12 +1356,12 @@ function UIKit.toast(screenGui: ScreenGui, text: string, kind: string?)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Size = UDim2.fromOffset(TOAST_W, 46),
 		Position = UDim2.fromOffset(0, -14),
-		BackgroundColor3 = C.ink,
+		BackgroundColor3 = C.glass,
 		BackgroundTransparency = 1,
 		TextTransparency = 1,
 		Parent = wrapper,
 	}, {
-		UIKit.corner(10),
+		UIKit.corner(Theme.radius),
 		UIKit.new("UIPadding", {
 			PaddingTop = UDim.new(0, 11),
 			PaddingBottom = UDim.new(0, 11),
@@ -1104,7 +1369,7 @@ function UIKit.toast(screenGui: ScreenGui, text: string, kind: string?)
 			PaddingRight = UDim.new(0, 16),
 		}),
 	})
-	local stroke = UIKit.stroke(C.paper, 1, 1)
+	local stroke = UIKit.stroke(C.line, 1, 1)
 	stroke.Parent = card
 	local accentBar = UIKit.new("Frame", {
 		Name = "Tab",
@@ -1117,7 +1382,7 @@ function UIKit.toast(screenGui: ScreenGui, text: string, kind: string?)
 	}, { UIKit.corner(3) })
 
 	local slide = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	tween(card, slide, { Position = UDim2.fromOffset(0, 0), BackgroundTransparency = 0.08, TextTransparency = 0 })
+	tween(card, slide, { Position = UDim2.fromOffset(0, 0), BackgroundTransparency = 0.06, TextTransparency = 0 })
 	tween(stroke, slide, { Transparency = 0.85 })
 	tween(accentBar, slide, { BackgroundTransparency = 0 })
 	task.delay(3.6, function()

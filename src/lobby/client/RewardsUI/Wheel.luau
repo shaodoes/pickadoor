@@ -36,12 +36,12 @@ local BRASS, BRASS_DARK, BRASS_LIGHT = Common.BRASS, Common.BRASS_DARK, Common.B
 
 local ACCENT = Rewards.Stations.Wheel.color
 local VIOLET_DEEP = Color3.fromRGB(122, 64, 186)
-local CARD = Color3.fromRGB(34, 24, 19)
-local CARD_LIGHT = Color3.fromRGB(52, 38, 31)
+local CARD = Color3.fromRGB(24, 27, 36)
+local CARD_LIGHT = Color3.fromRGB(38, 43, 56)
 local BULB = Color3.fromRGB(255, 236, 190)
 local READY = Color3.fromRGB(150, 206, 140)
-local OFF_FACE = Color3.fromRGB(58, 44, 40)
-local BUY_FACE = Color3.fromRGB(78, 56, 44)
+local OFF_FACE = Color3.fromRGB(46, 50, 62)
+local BUY_FACE = Color3.fromRGB(56, 62, 78)
 
 -- Wheel geometry (design px). Wedges are isosceles triangles, each split into two right triangles: a frame
 -- whose UIGradient has a hard transparency edge along its diagonal (UIGradient rotates in pixel space, so

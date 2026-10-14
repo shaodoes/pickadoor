@@ -30,7 +30,6 @@ local RewardsUI = script.Parent:WaitForChild("RewardsUI")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local Colors, Face = UIKit.Colors, UIKit.Face
 
 local snapshot: any = nil -- latest profile snapshot from the server
 
@@ -175,7 +174,7 @@ end)
 -- Stations: ring detection + "!" badges
 ------------------------------------------------------------------------------------------
 local stationModels: { [string]: Instance } = {}
-local badges: { [string]: { gui: BillboardGui, bang: TextLabel } } = {}
+local badges: { [string]: { gui: BillboardGui, step: (t: number) -> () } } = {}
 
 local function refreshBadges()
 	local waiting = Rewards.badges(snapshot)
@@ -192,7 +191,7 @@ local function makeBadge(name: string, model: Instance)
 		end
 		local bb = UIKit.new("BillboardGui", {
 			Name = "Badge",
-			Size = UDim2.fromOffset(46, 46),
+			Size = UDim2.fromOffset(56, 56),
 			StudsOffset = Vector3.new(0, 2.4, 0),
 			AlwaysOnTop = true,
 			LightInfluence = 0,
@@ -207,30 +206,17 @@ local function makeBadge(name: string, model: Instance)
 				local labelH = label.Size.Y.Offset
 				bb.StudsOffset = label.StudsOffset
 				bb.StudsOffsetWorldSpace = label.StudsOffsetWorldSpace
-				bb.Size = UDim2.fromOffset(46, labelH + 2 * 50)
+				bb.Size = UDim2.fromOffset(56, labelH + 2 * 56)
 			else
 				bb.StudsOffset = label.StudsOffset + Vector3.new(0, label.Size.Y.Scale / 2 + 1.2, 0)
 				bb.StudsOffsetWorldSpace = label.StudsOffsetWorldSpace
 			end
 		end
-		-- a cream badge with a red ring and an ink "!", bobbing gently (as over the Librarian)
-		local bang = UIKit.new("TextLabel", {
-			Text = "!",
-			FontFace = Face.bold,
-			TextScaled = true,
-			TextColor3 = Colors.ink,
-			BackgroundColor3 = Colors.cream,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0, 23),
-			Size = UDim2.fromOffset(36, 36),
-			Parent = bb,
-		}, {
-			UIKit.corner(18),
-			UIKit.stroke(Colors.accent, 3),
-			UIKit.new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }),
-		})
+		-- a dark glass diamond glowing in the station's own colour, a white "!", bobbing gently
+		local info = Rewards.Stations[name]
+		local _, step = UIKit.alertMarker(bb, UDim2.new(0.5, 0, 0, 28), 36, info and info.color)
 		bb.Parent = anchor
-		badges[name] = { gui = bb, bang = bang }
+		badges[name] = { gui = bb, step = step }
 		refreshBadges()
 	end)
 end
@@ -335,7 +321,7 @@ RunService.RenderStepped:Connect(function()
 	local t = os.clock()
 	for _, badge in badges do
 		if badge.gui.Enabled then
-			badge.bang.Position = UDim2.new(0.5, 0, 0, 23 + math.sin(t * 3) * 5)
+			badge.step(t)
 		end
 	end
 end)

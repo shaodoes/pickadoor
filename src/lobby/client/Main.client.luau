@@ -1,6 +1,8 @@
 -- Lobby HUD: player card with the Keys counter, the bottom menu (PICK A DOOR + Shop / Lantern /
 -- Titles / How to Play / Invite / Revive), shop + lantern + titles panels, queue status bar, and toasts.
 -- Buttons and panels animate and click via UIKit; everything scales to the screen via UIKit.fit.
+-- Depth and motion: a spinning 3D key (UI3D) on the Keys card and in the shop's balance chip, a light
+-- sweep and a breathing halo on PICK A DOOR (one UIFx group for the whole HUD).
 --
 -- Instance names other scripts/tests rely on (keep them): ScreenGui "LobbyUI" with direct children
 -- "Keys" (TextLabel, Text = "<n> Keys"), "Menu" > "PickADoor" (TextButton), "QueueBar" (its first
@@ -20,7 +22,10 @@ local Items = require(Shared.Items)
 local Lanterns = require(Shared.Lanterns)
 local LanternBuilder = require(Shared.LanternBuilder)
 local Remotes = require(Shared.Remotes)
+local Sfx = require(Shared.Sfx)
 local Titles = require(Shared.Titles)
+local UI3D = require(Shared.UI3D)
+local UIFx = require(Shared.UIFx)
 local UIKit = require(Shared.UIKit)
 
 local player = Players.LocalPlayer
@@ -35,6 +40,10 @@ task.spawn(function()
 		task.wait(0.5)
 	end
 end)
+
+-- the HUD's looping effects (PICK A DOOR's sweep and halo); the HUD is always up, so always on
+local hudFx = UIFx.group()
+hudFx:setActive(true)
 
 local data = nil -- latest profile snapshot from the server
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -68,7 +77,7 @@ local function text(props: { [string]: any })
 		BackgroundTransparency = 1,
 		FontFace = Face.body,
 		TextSize = 18,
-		TextColor3 = Colors.ink,
+		TextColor3 = Colors.paper,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	}
 	for key, value in props do
@@ -96,26 +105,23 @@ end
 -- Player card + Keys counter
 ------------------------------------------------------------------------------------------
 -- The card itself is the "Keys" TextLabel: its Text is the count, everything else is children
--- laid out around it (UIPadding pushes the text to the right of the avatar).
+-- laid out around it (UIPadding pushes the text to the right of the avatar). A dark glass card with
+-- the count in key gold and a small 3D key turning beside it.
 local CARD_W, CARD_H = 236, 66
 local keysLabel = UIKit.new("TextLabel", {
 	Name = "Keys",
 	Text = "...",
-	FontFace = Face.bold,
+	FontFace = Face.display,
 	TextSize = 24,
-	TextColor3 = Colors.paper,
+	TextColor3 = Colors.keyBright,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	TextYAlignment = Enum.TextYAlignment.Center,
-	BackgroundColor3 = Colors.ink,
-	BackgroundTransparency = 0.12,
 	AnchorPoint = if isTouch then Vector2.new(1, 0) else Vector2.new(1, 1),
 	-- desktop: bottom-right like the reference; touch: top-right, clear of the jump button
 	Position = if isTouch then UDim2.new(1, -12, 0, 10) else UDim2.new(1, -16, 1, -16),
 	Size = UDim2.fromOffset(CARD_W, CARD_H),
 	Parent = gui,
 }, {
-	UIKit.corner(14),
-	UIKit.stroke(Colors.paper, 1.5, 0.82),
 	UIKit.new("UIPadding", {
 		PaddingLeft = UDim.new(0, 92),
 		PaddingTop = UDim.new(0, 28),
@@ -123,6 +129,8 @@ local keysLabel = UIKit.new("TextLabel", {
 		PaddingRight = UDim.new(0, 10),
 	}),
 })
+UIKit.glass(keysLabel, { radius = 16, flat = true })
+local cardStroke = keysLabel:FindFirstChildOfClass("UIStroke") :: UIStroke
 UIKit.fit(keysLabel)
 -- children are positioned relative to the padded box (origin at 92, 28)
 local avatar = UIKit.new("ImageLabel", {
@@ -132,32 +140,48 @@ local avatar = UIKit.new("ImageLabel", {
 	Position = UDim2.fromOffset(-82, -19),
 	Size = UDim2.fromOffset(50, 50),
 	Parent = keysLabel,
-}, { UIKit.corner(25), UIKit.stroke(Colors.cream, 2, 0.2) })
+}, { UIKit.corner(25), UIKit.stroke(Colors.accent, 1.5, 0.15) })
 avatar.ZIndex = 2
 text({
 	Name = "PlayerName",
 	Text = player.DisplayName,
-	FontFace = Face.semi,
-	TextSize = 16,
+	FontFace = Face.uiSemi,
+	TextSize = 15,
 	TextColor3 = Colors.muted,
 	TextTruncate = Enum.TextTruncate.AtEnd,
 	Position = UDim2.fromOffset(-24, -21),
 	Size = UDim2.new(1, 24, 0, 18),
 	Parent = keysLabel,
 })
-local keyIcon = UIKit.icon("key", Colors.gold, 20)
-keyIcon.AnchorPoint = Vector2.new(0, 0.5)
-keyIcon.Position = UDim2.new(0, -25, 0.5, 0)
-keyIcon.Parent = keysLabel
-local keyIconScale = UIKit.new("UIScale", { Parent = keyIcon })
+local KEY_3D = 30
+local keySpin = UI3D.key(keysLabel, KEY_3D, {
+	anchor = Vector2.new(0.5, 0.5),
+	position = UDim2.new(0, -16, 0.5, 0),
+	speed = 1.3,
+	zIndex = 2,
+})
+local keyIconScale = UIKit.new("UIScale", { Parent = keySpin.viewport })
 local shopBalance: TextLabel? = nil -- the balance chip in the shop header, set up below
+local shopKey: UI3D.Spinner? = nil -- ... and its little key
 local shownKeys = nil
 
 local function keysText(value: number): string
-	return string.format("%d %s", value, Config.CurrencyName)
+	return string.format("%d %s", math.round(value), Config.CurrencyName)
 end
 
--- Count the number up/down to the new value; the key icon pops and the text flashes gold.
+-- a soft tick per step while the count climbs (throttled: a big win doesn't machine-gun)
+local lastTick = 0
+local function tickingKeysText(value: number): string
+	local now = os.clock()
+	if now - lastTick > 0.075 then
+		lastTick = now
+		Sfx.play("Hover", 0.25)
+	end
+	return keysText(value)
+end
+
+-- Count the number up/down to the new value. A rise spins the 3D key up, pops it, bursts gold
+-- sparks off it, flashes the card's rim and floats "+n" above the card.
 local function setKeys(value: number)
 	if shopBalance then
 		shopBalance.Text = tostring(value)
@@ -172,25 +196,28 @@ local function setKeys(value: number)
 	end
 	local from = shownKeys
 	shownKeys = value
-	keyIconScale.Scale = 1.5
-	keyIcon.Rotation = -25
-	UIKit.tween(keyIconScale, TweenInfo.new(0.45, Enum.EasingStyle.Back), { Scale = 1 })
-	UIKit.tween(keyIcon, TweenInfo.new(0.45, Enum.EasingStyle.Back), { Rotation = 0 })
-	keysLabel.TextColor3 = Colors.goldBright
-	UIKit.tween(keysLabel, TweenInfo.new(0.8), { TextColor3 = Colors.paper })
-	local counter = Instance.new("NumberValue")
-	counter.Value = from
-	counter.Changed:Connect(function(v)
-		keysLabel.Text = keysText(math.round(v))
-	end)
-	local t = UIKit.tween(counter, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Value = value })
-	t.Completed:Connect(function()
-		counter:Destroy()
-	end)
+	local rose = value > from
+	UIFx.countUp(keysLabel, from, value, 0.7, if rose then tickingKeysText else keysText)
+	keySpin:kick(if rose then 16 else 6)
+	if shopKey then
+		shopKey:kick(if rose then 12 else 5)
+	end
+	keyIconScale.Scale = if rose then 1.6 else 1.2
+	UIKit.tween(keyIconScale, TweenInfo.new(0.5, Enum.EasingStyle.Back), { Scale = 1 })
+	if not rose then
+		return
+	end
+	keysLabel.TextColor3 = Colors.paperLight
+	UIKit.tween(keysLabel, TweenInfo.new(0.9), { TextColor3 = Colors.keyBright })
+	cardStroke.Color = Colors.keyBright
+	cardStroke.Transparency = 0.1
+	UIKit.tween(cardStroke, TweenInfo.new(1), { Color = Colors.line, Transparency = UIKit.Theme.lineAlpha })
+	UIFx.burst(keysLabel, UDim2.new(0, -16, 0.5, 0), { count = 12, spread = 54, size = 7 })
+	UIFx.flyUp(keysLabel, UDim2.new(0.3, 0, 0, -26), "+" .. tostring(value - from), { size = 26 })
 end
 
 ------------------------------------------------------------------------------------------
--- Bottom menu: the big cream PICK A DOOR pill (quick join) with a row of ink buttons beneath,
+-- Bottom menu: the big teal PICK A DOOR pill (quick join) with a row of glass buttons beneath,
 -- after the reference lobby's HOST GAME / STORE bar.
 ------------------------------------------------------------------------------------------
 local MENU_H = 140
@@ -208,11 +235,19 @@ local playButton = UIKit.button("PICK A DOOR", {
 	Name = "PickADoor",
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.fromScale(0.5, 0),
-	Size = UDim2.fromOffset(340, 72),
-	TextSize = 40,
+	Size = UDim2.fromOffset(360, 72),
+	TextSize = 34,
+	FontFace = Face.display,
 	ZIndex = 1,
 	Parent = menu,
-}, { style = "cream", icon = "play", iconSize = 34, radius = 14, depth = 5 })
+}, { style = "primary", icon = "play", iconSize = 30, radius = 18, depth = 5 })
+-- a light band sweeps across the face every few seconds, and the halo under it slowly breathes
+local playFace = playButton:FindFirstChild("Face") :: Frame
+local playGlow = playButton:FindFirstChild("Glow") :: Frame?
+UIFx.shine(playFace, hudFx, { period = 3.6, width = 0.2, alpha = 0.4 })
+if playGlow then
+	UIFx.pulse(playGlow, hudFx, 0.05, 2.8)
+end
 
 local buttonRow = UIKit.new("Frame", {
 	Name = "Row",
@@ -238,13 +273,14 @@ local function menuButton(caption: string, order: number, icon: string, showText
 		Name = (caption:gsub("%s", "")),
 		LayoutOrder = order,
 		Size = UDim2.fromOffset(showText and 136 or 52, 52),
-		TextSize = 24,
+		TextSize = 22,
+		FontFace = Face.ui,
 		Parent = buttonRow,
 	}, {
-		style = "ink",
+		style = "glass",
 		icon = icon,
-		iconSize = showText and 22 or 26,
-		radius = 12,
+		iconSize = showText and 22 or 24,
+		radius = 16,
 		tooltip = not showText and caption or nil,
 	})
 end
@@ -259,8 +295,19 @@ local reviveButton = menuButton("REVIVE PASS", 6, "heart", false)
 local function refreshPlayButton()
 	local queued = player:GetAttribute("QueuedPad") ~= nil
 	playButton.Text = queued and "LEAVE QUEUE" or "PICK A DOOR"
-	setIcon(playButton, queued and "close" or "play", Colors.ink, queued and 26 or 34)
+	setIcon(playButton, queued and "close" or "play", Colors.ink, queued and 24 or 30)
 	playButton:SetAttribute("BaseColor", queued and Colors.creamHot or Colors.cream)
+	if playGlow then
+		for _, layer in playGlow:GetChildren() do
+			if layer:IsA("Frame") then
+				UIKit.tween(
+					layer,
+					TweenInfo.new(0.3),
+					{ BackgroundColor3 = queued and Colors.creamHot or Colors.accent }
+				)
+			end
+		end
+	end
 end
 player:GetAttributeChangedSignal("QueuedPad"):Connect(refreshPlayButton)
 playButton.Activated:Connect(function()
@@ -310,7 +357,8 @@ do
 	if header then
 		local chip = UIKit.new("Frame", {
 			Name = "Balance",
-			BackgroundColor3 = Colors.inkSoft,
+			BackgroundColor3 = Colors.ink,
+			BackgroundTransparency = 0.2,
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -60, 0.5, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
@@ -319,7 +367,8 @@ do
 			Parent = header,
 		}, {
 			UIKit.corner(17),
-			UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 14) }),
+			UIKit.stroke(Colors.key, 1, 0.6),
+			UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 14) }),
 			UIKit.new("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -327,15 +376,16 @@ do
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
 		})
-		local icon = UIKit.icon("key", Colors.gold, 18)
-		icon.LayoutOrder = 1
-		icon.Parent = chip
+		shopKey = UI3D.key(chip, 28, { speed = 1.1, zIndex = 2 })
+		if shopKey then
+			shopKey.viewport.LayoutOrder = 1
+		end
 		shopBalance = text({
 			Name = "Amount",
 			Text = shownKeys and tostring(shownKeys) or "...",
-			FontFace = Face.bold,
+			FontFace = Face.display,
 			TextSize = 20,
-			TextColor3 = Colors.paper,
+			TextColor3 = Colors.keyBright,
 			AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.fromOffset(0, 34),
 			LayoutOrder = 2,
@@ -364,11 +414,12 @@ local function row(parent: Instance, order: number, height: number, highlight: C
 	local frame = UIKit.new("Frame", {
 		LayoutOrder = order,
 		Size = UDim2.new(1, -12, 0, height),
-		BackgroundColor3 = Colors.paperLight,
+		BackgroundColor3 = Colors.glassRaised,
+		BorderSizePixel = 0,
 		Parent = parent,
 	}, {
-		UIKit.corner(12),
-		UIKit.stroke(highlight or Colors.ink, highlight and 2 or 1.5, highlight and 0.2 or 0.84),
+		UIKit.corner(14),
+		UIKit.stroke(highlight or Colors.line, highlight and 1.5 or 1, highlight and 0.25 or UIKit.Theme.lineAlpha),
 	})
 	UIKit.hoverRow(frame)
 	return frame
@@ -384,8 +435,8 @@ local function sectionHeader(parent: Instance, order: number, caption: string)
 	})
 	text({
 		Text = caption,
-		FontFace = Face.semi,
-		TextSize = 15,
+		FontFace = Face.uiSemi,
+		TextSize = 14,
 		TextColor3 = Colors.inkMuted,
 		Size = UDim2.fromScale(1, 1),
 		Parent = holder,
@@ -397,8 +448,8 @@ local function rowTitle(parent: Instance, caption: string, rightInset: number, y
 	return text({
 		Name = "Title",
 		Text = caption,
-		FontFace = Face.bold,
-		TextSize = 22,
+		FontFace = Face.ui,
+		TextSize = 21,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Position = UDim2.fromOffset(74, y or 10),
 		Size = UDim2.new(1, -(74 + rightInset), 0, 28),
@@ -442,7 +493,7 @@ local function buildShop()
 	sectionHeader(shopList, -20, "GAME PASS")
 	local owned = player:GetAttribute("HasRevivePass") == true
 	local pass = row(shopList, -19, 76, Colors.accent)
-	pass.BackgroundColor3 = Color3.fromRGB(251, 236, 226)
+	pass.BackgroundColor3 = Colors.glassRaised:Lerp(Colors.accent, 0.1)
 	chip("heart", Colors.paperLight, Colors.accent).Parent = pass
 	rowTitle(pass, "REVIVE PASS", 170)
 	rowBlurb(pass, "Come back once per trial. Game pass (Robux).", 170)
@@ -528,31 +579,31 @@ local VIEW_H = 226
 local viewport = UIKit.new("ViewportFrame", {
 	Name = "Preview",
 	Size = UDim2.fromOffset(VIEW_W, VIEW_H),
-	BackgroundColor3 = Color3.fromRGB(44, 31, 25),
-	Ambient = Color3.fromRGB(128, 108, 90),
+	BackgroundColor3 = Color3.fromRGB(22, 25, 34),
+	Ambient = Color3.fromRGB(128, 112, 100),
 	LightColor = Color3.fromRGB(255, 220, 180),
 	LightDirection = Vector3.new(-1, -1, -1),
 	Parent = lanternContent,
 }, {
-	UIKit.corner(12),
-	UIKit.stroke(Colors.ink, 2, 0.4),
-	-- warm pool of light behind the lantern
+	UIKit.corner(14),
+	UIKit.hairline(0.8),
+	-- a pool of light behind the lantern, falling off to cold dark
 	UIKit.new("UIGradient", {
 		Rotation = 90,
-		Color = ColorSequence.new(Color3.fromRGB(255, 232, 196), Color3.fromRGB(128, 104, 90)),
+		Color = ColorSequence.new(Color3.fromRGB(236, 226, 214), Color3.fromRGB(96, 104, 124)),
 	}),
 })
--- warm vignette over the render: two dark sheets that clear toward the middle (top/bottom, left/right)
+-- vignette over the render: two dark sheets that clear toward the middle (top/bottom, left/right)
 for _, rotation in { 90, 0 } do
 	UIKit.new("Frame", {
 		Name = "Vignette",
-		BackgroundColor3 = Color3.fromRGB(22, 11, 6),
+		BackgroundColor3 = Colors.shadow,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		Parent = viewport,
 	}, {
-		UIKit.corner(12),
+		UIKit.corner(14),
 		UIKit.new("UIGradient", {
 			Rotation = rotation,
 			Transparency = NumberSequence.new({
@@ -587,11 +638,12 @@ UIKit.corner(10).Parent = previewName
 -- info card under the viewport
 local info = UIKit.new("Frame", {
 	Name = "Info",
-	BackgroundColor3 = Colors.paperLight,
+	BackgroundColor3 = Colors.glassRaised,
+	BorderSizePixel = 0,
 	Position = UDim2.fromOffset(0, VIEW_H + 10),
 	Size = UDim2.new(0, VIEW_W, 1, -(VIEW_H + 10)),
 	Parent = lanternContent,
-}, { UIKit.corner(12), UIKit.stroke(Colors.ink, 1.5, 0.84) })
+}, { UIKit.corner(14), UIKit.hairline() })
 local rarityPill = text({
 	Name = "Rarity",
 	Text = "",
@@ -624,7 +676,7 @@ local blurb = text({
 	Name = "Description",
 	Text = "",
 	TextSize = 14,
-	TextColor3 = Colors.inkSoft,
+	TextColor3 = Colors.muted,
 	TextWrapped = true,
 	TextYAlignment = Enum.TextYAlignment.Top,
 	Position = UDim2.fromOffset(12, 36),
@@ -753,7 +805,7 @@ local function buildLanterns()
 		sub.Position = UDim2.fromOffset(74, 38)
 		local rarityText = string.format(
 			'<font color="#%s"><b>%s</b></font>',
-			rarityColor:Lerp(Colors.ink, 0.2):ToHex(),
+			rarityColor:Lerp(Colors.paperLight, 0.15):ToHex(),
 			string.upper(def.rarity)
 		)
 		sub.Text = if owned
@@ -832,7 +884,7 @@ local function buildTitles()
 		sub.Position = UDim2.fromOffset(74, 38)
 		local rarityText = string.format(
 			'<font color="#%s"><b>%s</b></font>',
-			rarityColor:Lerp(Colors.ink, 0.2):ToHex(),
+			rarityColor:Lerp(Colors.paperLight, 0.15):ToHex(),
 			string.upper(def.rarity)
 		)
 		if earned then
@@ -874,17 +926,16 @@ local queueBar = UIKit.new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, 120), -- parked below the screen
 	Size = UDim2.fromOffset(470, 64),
-	BackgroundColor3 = Colors.ink,
-	BackgroundTransparency = 0.06,
 	Visible = false,
 	Parent = gui,
-}, { UIKit.corner(14), UIKit.stroke(Colors.paper, 1.5, 0.82) })
+})
+UIKit.glass(queueBar, { radius = 16, alpha = 0.06 })
 UIKit.fit(queueBar)
 -- (must stay the bar's first TextLabel: tests read it)
 local queueLabel = text({
 	Name = "Status",
-	FontFace = Face.semi,
-	TextSize = 22,
+	FontFace = Face.uiSemi,
+	TextSize = 20,
 	TextColor3 = Colors.paper,
 	Position = UDim2.fromOffset(26, 0),
 	Size = UDim2.new(1, -160, 1, -6),
@@ -918,7 +969,7 @@ local leaveButton = UIKit.button("LEAVE", {
 	Position = UDim2.new(1, -12, 0.5, 0),
 	Size = UDim2.fromOffset(112, 42),
 	Parent = queueBar,
-}, { style = "accent", icon = "close", iconSize = 14 })
+}, { style = "danger", icon = "close", iconSize = 12 })
 leaveButton.Activated:Connect(function()
 	Remotes.get("LeaveQueue"):FireServer()
 end)

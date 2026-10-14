@@ -250,23 +250,22 @@ local function ensureUI(): UI
 	UIKit.FitChanged:Connect(function()
 		box.Position = bottomPosition()
 	end)
-	UIKit.shadow(box, 16, 8, 1)
+	UIKit.shadow(box, UIKit.Theme.radiusLarge, 8, 1)
 	local sheet = UIKit.new("Frame", {
 		Name = "Sheet",
-		BackgroundColor3 = Colors.paper,
-		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 1,
 		Parent = box,
-	}, { UIKit.corner(16), UIKit.stroke(Colors.ink, 2, 0.35), UIKit.sheen(0.35) })
+	})
+	UIKit.glass(sheet, { radius = UIKit.Theme.radiusLarge, alpha = UIKit.Theme.sheetAlpha, line = 0.8 })
 	-- name tab hanging over the top edge
-	local tabStroke = UIKit.stroke(Colors.accentDark, 1.5, 0.3)
+	local tabStroke = UIKit.stroke(Colors.accentDark, 1, 0.2)
 	local tab = UIKit.new("TextLabel", {
 		Name = "Speaker",
 		Text = "",
-		FontFace = Face.bold,
-		TextSize = 18,
-		TextColor3 = Colors.paperLight,
+		FontFace = Face.ui,
+		TextSize = 17,
+		TextColor3 = Colors.ink,
 		BackgroundColor3 = Colors.accent,
 		Position = UDim2.fromOffset(22, -16),
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -274,7 +273,7 @@ local function ensureUI(): UI
 		ZIndex = 3,
 		Parent = sheet,
 	}, {
-		UIKit.corner(8),
+		UIKit.corner(10),
 		tabStroke,
 		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }),
 	})
@@ -285,7 +284,7 @@ local function ensureUI(): UI
 		FontFace = Face.serif,
 		TextSize = BODY_TEXT,
 		LineHeight = LINE_HEIGHT,
-		TextColor3 = Colors.ink,
+		TextColor3 = Colors.paper,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -396,10 +395,13 @@ local function applyAccent(color: Color3)
 	local u = ensureUI()
 	state.accent = color
 	u.tab.BackgroundColor3 = color
-	u.tabStroke.Color = color:Lerp(Color3.new(), 0.3)
+	u.tabStroke.Color = color:Lerp(Color3.new(1, 1, 1), 0.35)
+	-- dark text on a bright speaker colour, light text on a deep one
+	local luma = 0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B
+	u.tab.TextColor3 = if luma > 0.5 then Colors.ink else Colors.paperLight
 end
 
--- A choice button: paper face with an ink number badge and the player's line in italic serif.
+-- A choice button: a glass face with a dark number badge and the player's line in italic serif.
 local function makeChoice(index: number, choice: Choice, parent: Instance): (Frame, TextButton)
 	local cell = UIKit.new("Frame", {
 		Name = "Choice" .. index,
@@ -431,7 +433,7 @@ local function makeChoice(index: number, choice: Choice, parent: Instance): (Fra
 		Text = choice.text,
 		FontFace = SERIF_ITALIC,
 		TextSize = 19,
-		TextColor3 = Colors.ink,
+		TextColor3 = Colors.paper,
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -873,14 +875,14 @@ local function showBubble(speaker: string, text: string, color: Color3, linger: 
 	local lineH = math.ceil(lineBounds.Y) + 4
 	local card = UIKit.new("Frame", {
 		Name = "Bubble",
-		BackgroundColor3 = Colors.ink,
-		BackgroundTransparency = 0.06,
+		BackgroundColor3 = Colors.glass,
+		BackgroundTransparency = 0.04,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 0, state.silent and -22 or -10),
 		Size = UDim2.fromOffset(innerW + padL + padR, padT + speakerH + lineH + padB),
 		ZIndex = 6,
 		Parent = u.box,
-	}, { UIKit.corner(10), UIKit.stroke(Colors.paper, 1, 0.85) })
+	}, { UIKit.corner(12), UIKit.hairline(0.82) })
 	UIKit.new("Frame", {
 		Name = "Tab",
 		BackgroundColor3 = color,

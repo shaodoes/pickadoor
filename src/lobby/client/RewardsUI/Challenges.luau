@@ -33,13 +33,13 @@ local SERIF_ITALIC =
 
 local CREAM = Colors.paper
 local CREAM_MUTED = Colors.muted
-local INK_DEEP = Color3.fromRGB(20, 14, 12)
-local CARD_TOP = Color3.fromRGB(50, 37, 31)
-local CARD_BOTTOM = Color3.fromRGB(29, 21, 18)
-local TILE_BG = Color3.fromRGB(24, 17, 14)
+local INK_DEEP = Color3.fromRGB(12, 14, 19)
+local CARD_TOP = Color3.fromRGB(36, 41, 54)
+local CARD_BOTTOM = Color3.fromRGB(20, 23, 31)
+local TILE_BG = Color3.fromRGB(14, 16, 22)
 local TILE_READY = Color3.fromRGB(28, 72, 74)
 local CLAIM_FACE = Color3.fromRGB(38, 138, 140)
-local WAIT_FACE = Color3.fromRGB(62, 46, 39)
+local WAIT_FACE = Color3.fromRGB(46, 52, 66)
 local FILL_DONE = Colors.goldBright
 local WHITE = Color3.new(1, 1, 1)
 
