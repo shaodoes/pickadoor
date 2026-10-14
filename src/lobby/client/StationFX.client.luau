@@ -138,17 +138,17 @@ local function stepRings(t: number, camPos: Vector3)
 			continue
 		end
 		local s = 0.5 + 0.5 * math.sin(t * (2 * math.pi / PULSE_PERIOD) + r.phase)
-		r.rim.Transparency = 0.12 + 0.3 * (1 - s)
+		r.rim.Transparency = 0.35 + 0.2 * (1 - s)
 		if r.band then
-			r.band.Transparency = 0.45 + 0.3 * s -- the inner band breathes against the rim
+			r.band.Transparency = 0.7 + 0.15 * s -- the inner band breathes against the rim
 		end
 		if r.haze then
 			local grow = 0.95 + 0.09 * s
 			r.haze.Size = Vector3.new(r.hazeSize.X, r.hazeSize.Y * grow, r.hazeSize.Z * grow)
-			r.haze.Transparency = 0.93 - 0.05 * s
+			r.haze.Transparency = 0.96 - 0.03 * s
 		end
 		if r.light then
-			r.light.Brightness = 0.3 + 0.25 * s
+			r.light.Brightness = 0.12 + 0.13 * s
 		end
 		if r.label then
 			r.label.StudsOffset = r.labelBase + Vector3.new(0, 0.1 * math.sin(t * 1.1 + r.phase), 0)

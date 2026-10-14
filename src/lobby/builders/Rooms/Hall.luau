@@ -99,9 +99,8 @@ function Hall.build(root: Instance)
 		Furniture.floorLamp(model, Vector3.new(ROOM.x0 + 3, Y, -1.5))
 	end
 
-	-- left middle: two long study desks with green banker lamps, chairs on both sides. The archivist's
-	-- desk (Layout.Stations.Challenges) sits in the alcove between them; the daily chest stands off the
-	-- front one's +X side, by the walkway.
+	-- left middle: two long study desks with green banker lamps, chairs on both sides. The Wheel of
+	-- Fate (Layout.Stations) stands in the gap between them, facing the walkway.
 	for _, spec in { { z = -11, length = 12, seats = 6, bulb = 3.5 }, { z = 15, length = 12, seats = 6, bulb = 3.5 } } do
 		local z = spec.z
 		local cf = CFrame.new(-17, Y, z) * faceE -- desk runs along Z
@@ -139,7 +138,7 @@ function Hall.build(root: Instance)
 	end
 	if Furniture.planter then
 		Furniture.planter(model, CFrame.new(-13, Y, ROOM.z0 + 1.6), 8)
-		Furniture.planter(model, CFrame.new(25.5, Y, ROOM.z0 + 1.6), 8) -- right of the Wheel of Fate
+		Furniture.planter(model, CFrame.new(25.5, Y, ROOM.z0 + 1.6), 8) -- behind the archivist's desk
 	end
 	for _, z in { 22, 8, -6 } do
 		Kit.bareBulb(model, Vector3.new(5, CEIL - 4.2, z), 22, 1.1, z == 8, "globe", CEIL)
@@ -186,9 +185,9 @@ function Hall.build(root: Instance)
 		{ 21, 28, -16, -6 }, -- reading tables
 		{ -32, -22, -20, 30 }, -- window nook
 		-- reward stations (Layout.Stations), object + ring
-		{ -21.5, -7, -3, 7.2 }, -- archivist's desk, catalogue + ring
-		{ 7.4, 20.6, -20, -4.8 }, -- Wheel of Fate + ring
-		{ -10.6, 2.6, 6.4, 16.6 }, -- daily chest + ring
+		{ -21.5, -7, -4.5, 8.5 }, -- Wheel of Fate + ring
+		{ 8, 17.8, 6.3, 19.2 }, -- daily chest + ring
+		{ 8, 18.2, -15.8, -2.3 }, -- archivist's desk, him + ring
 		{ 21, 30, -20, -16.5 }, -- back-right planter
 	}
 	Clutter.papers(

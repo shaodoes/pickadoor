@@ -47,37 +47,40 @@ Layout.Guide = { position = Vector3.new(4.5, 6, 45.5), facing = Vector3.new(12, 
 Layout.Shopkeeper = { position = Vector3.new(-23.4, 6.1, 53.2), facing = Vector3.new(-12, 6.1, 53.2) }
 
 -- Reading-hall reward stations: a glowing ring on the floor (walk onto it to open that station's UI)
--- with its object just behind it. Kept off the stair->arch walkway, the workshop path and the desks:
---   Challenges the archivist's desk in the alcove between the two study desks, facing +X: the one
---              spot on the left that the (-8, 17.5) pillar hides from neither the stair foot nor the
---              walkway. The desk assembly (desk + card catalogue on its +Z end) spans z ~-0.25..4.4,
---              x -19.2..-18.0; he stands 1.75 behind it, clear of the nook rug (x <= -21.15).
---   Wheel      back-right, dead ahead from the stair, a big centrepiece turned toward its ring; its
---              plinth stays inside the back wall (z >= -19.8) and left of the reading table (x <= 20.2)
---   Daily      out in the open in the middle of the hall, just left of the stair->arch walkway: in
---              view from the stair foot (and from the top of the grand stair). The ring sits between
---              the walkway (x >= ~4 here) and the front-left pillar (-8, 17.5); the chest stands on its
---              -X side, turned to face the ring and the players coming down from the stair.
+-- with its object just behind it. Spread round the edges so the middle of the hall (the rug) and the
+-- arch stay open: nothing stands between the stair foot and the doorway to the door hall.
+--   Wheel      the left aisle, in the gap between the two study desks (z -5 / 9 at x -21..-13), its
+--              frame (11.7 wide, 14.3 tall) facing the walkway, turned 12 degrees toward the stair;
+--              the ring (6.84 in front) sits in the gap between the left pillars. Any more turn puts
+--              the ring onto the front desk's chairs.
+--   Daily      the right side of the hall, mirrored with Challenges across z = 2 (the centreline
+--   Challenges of the workshop doorway, z -2..6), so the pair flank the path to the workshop. Both
+--              rings sit at x 12.7: clear of the stair->arch walkway on their left and 4.7 off the
+--              right pillar (20, -7.5) on their right. Each object stands 6.3 back from its ring at
+--              65 degrees off +X (away from the path), turned to face it: the chest toward the stair,
+--              the desk (+ card catalogue on its local +X end) toward the arch. He stands 1.75
+--              behind his desk.
 -- ring = floor centre (y = hall floor), object = floor-level CFrame whose -Z (LookVector) is the front.
 -- radius = the ring's bright rim AND the client trigger (Rewards.client: inside radius enters, +1 stays).
 Layout.Stations = {
 	Daily = {
-		ring = Vector3.new(-2.3, 0, 11.6),
+		ring = Vector3.new(12.7, 0, 11),
 		radius = 4.7,
-		object = CFrame.lookAt(Vector3.new(-8.6, 0, 10.4), Vector3.new(-2.3, 0, 11.6)),
+		object = CFrame.lookAt(Vector3.new(15.3625, 0, 16.7097), Vector3.new(12.7, 0, 11)),
 	},
 	Wheel = {
-		ring = Vector3.new(12.6, 0, -9.8),
+		ring = Vector3.new(-11.8095, 0, 3.4221),
 		radius = 4.7,
-		object = CFrame.lookAt(Vector3.new(14, 0, -16.5), Vector3.new(12.6, 0, -9.8)),
+		object = CFrame.lookAt(Vector3.new(-18.5, 0, 2), Vector3.new(-11.8095, 0, 3.4221)),
 	},
 	Challenges = {
-		ring = Vector3.new(-12, 0, 2.2),
-		radius = 4.6,
-		object = CFrame.lookAt(Vector3.new(-18.6, 0, 1.4), Vector3.new(-10, 0, 1.4)), -- the desk
-		npc = CFrame.lookAt(Vector3.new(-20.35, 0, 1.4), Vector3.new(-10, 0, 1.4)), -- stands behind it
+		ring = Vector3.new(12.7, 0, -7),
+		radius = 4.7,
+		object = CFrame.lookAt(Vector3.new(15.3625, 0, -12.7097), Vector3.new(12.7, 0, -7)), -- the desk
 	},
 }
+-- he stands 1.75 behind his desk, facing the same way
+Layout.Stations.Challenges.npc = Layout.Stations.Challenges.object * CFrame.new(0, 0, 1.75)
 
 -- Door wall
 Layout.DoorWallZ = -60

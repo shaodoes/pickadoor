@@ -119,53 +119,59 @@ end
 
 -- The glowing floor medallion: a bright neon rim with a soft haze just outside it, a dark inlay, a
 -- second fainter band, tick marks between the bands and a keyhole in the middle. Every layer is
--- 0.012 thick and stacked 0.01 apart, all within 0.08 of the floor (just above any rug).
+-- 0.012 thick and stacked 0.01 apart, all lifted RUG_CLEAR off the floor so they sit over the hall's
+-- rugs (top 0.08) instead of under them.
 -- The rim's outer edge is exactly `radius`, the same circle the client uses as the trigger (only the
 -- faint haze reaches 0.25 past it). Ticks, band and keyhole grow with the radius (k = 1 at radius 3).
+local TICK_WHITE = Color3.fromRGB(246, 242, 234)
+local RUG_CLEAR = 0.08
+
 local function ring(model: Model, centre: Vector3, radius: number, color: Color3, yaw: number): BasePart
 	local dark = color:Lerp(Color3.fromRGB(12, 10, 10), 0.84)
 	local k = radius / 3
 	local function disc(name: string, dia: number, h: number, transparency: number, col: Color3, material)
-		local part = cyl(model, name, 0.012, dia, CFrame.new(centre.X, FLOOR + h, centre.Z) * TO_Y, col, material)
+		local part =
+			cyl(model, name, 0.012, dia, CFrame.new(centre.X, FLOOR + RUG_CLEAR + h, centre.Z) * TO_Y, col, material)
 		part.Transparency = transparency
 		return part
 	end
-	disc("RingHaze", radius * 2 + 0.5, 0.02, 0.9, color, NEON)
-	local rim = disc("Ring", radius * 2, 0.03, 0.02, color, NEON)
+	disc("RingHaze", radius * 2 + 0.5, 0.02, 0.95, color, NEON)
+	local rim = disc("Ring", radius * 2, 0.03, 0.35, color, NEON)
 	-- the inside is a tinted wash over the neon rim disc below it; it has to hide most of that disc
 	-- (at 0.82 the whole medallion read as one blown-out neon puddle), so only the ~0.4 rim band
 	-- left showing round it burns bright
 	local rimWidth = 0.3 * math.min(k, 1.35)
 	disc("RingInlay", (radius - rimWidth) * 2, 0.04, 0, dark:Lerp(color, 0.18), Enum.Material.SmoothPlastic) -- opaque: only the rim glows
 	local inner = radius * 0.64
-	disc("RingBand", inner * 2, 0.05, 0.45, color, NEON)
+	disc("RingBand", inner * 2, 0.05, 0.7, color, NEON)
 	-- the band is a full neon disc too: a second inlay leaves only its ~0.13 edge showing
 	disc("RingInlay", inner * 2 - 0.26 * k, 0.055, 0, dark:Lerp(color, 0.18), Enum.Material.SmoothPlastic)
-	disc("RingCore", inner * 2 - 0.26 * k, 0.06, 0.94, color, NEON)
+	disc("RingCore", inner * 2 - 0.26 * k, 0.06, 0.97, color, NEON)
 
-	-- twelve ticks between the bands, every third one longer (a clock face on the floor)
+	-- twelve ticks between the bands, every third one longer (a clock face on the floor); white over
+	-- the dimmed coloured glow so the face reads at a glance
 	local outer = radius - rimWidth - 0.1
 	local thin = math.min(k, 1.4)
 	for i = 0, 11 do
 		local long = i % 3 == 0
 		local len = (outer - inner) * (if long then 0.7 else 0.4)
 		local mid = (inner + outer) / 2
-		local cf = CFrame.new(centre.X, FLOOR + 0.05, centre.Z)
+		local cf = CFrame.new(centre.X, FLOOR + RUG_CLEAR + 0.05, centre.Z)
 			* CFrame.Angles(0, yaw + i * math.pi / 6, 0)
 			* CFrame.new(0, 0, -mid)
 		local mark = box(
 			model,
 			"RingTick",
-			Vector3.new((if long then 0.09 else 0.06) * thin, 0.012, len),
+			Vector3.new((if long then 0.15 else 0.1) * thin, 0.012, len),
 			cf,
-			color,
+			TICK_WHITE,
 			NEON,
 			DETAIL
 		)
-		mark.Transparency = 0.2
+		mark.Transparency = 0.05
 	end
 	-- keyhole, its slot pointing at whoever steps on from the front
-	local key = CFrame.new(centre.X, FLOOR + 0.07, centre.Z) * CFrame.Angles(0, yaw, 0)
+	local key = CFrame.new(centre.X, FLOOR + RUG_CLEAR + 0.07, centre.Z) * CFrame.Angles(0, yaw, 0)
 	cyl(model, "RingKeyhole", 0.012, 0.5 * k, key * CFrame.new(0, 0, -0.12 * k) * TO_Y, color, NEON).Transparency = 0.15
 	box(
 		model,
@@ -179,12 +185,12 @@ local function ring(model: Model, centre: Vector3, radius: number, color: Color3
 		0.15
 
 	-- a soft light so the ring tints the floor and anyone standing on it (no shadows); its reach
-	-- follows the ring's size, the brightness stays low (StationFX breathes it 0.3..0.55)
+	-- follows the ring's size, the brightness stays low (StationFX breathes it 0.12..0.25)
 	local point = Instance.new("Attachment")
 	point.Name = "Glow"
 	point.Parent = rim
 	point.WorldPosition = Vector3.new(centre.X, FLOOR + 0.8, centre.Z)
-	local light = Kit.pointLight(point, math.clamp(radius * 2.2, 8, 11), 0.25, false, color)
+	local light = Kit.pointLight(point, math.clamp(radius * 2.2, 8, 11), 0.15, false, color)
 	light.Name = "RingLight"
 
 	model:SetAttribute("RingRadius", radius)
@@ -455,9 +461,10 @@ local function buildDaily(parent: Instance)
 	ring(model, spec.ring, spec.radius, info.color, yaw)
 	buildChest(model, base)
 	-- over the chest (lid top ~3.2): high enough to clear the lid swinging open and the coins rising
-	-- the 3D title turns toward a point between the ring and the stair foot, so it reads from the stair
+	-- the 3D title turns toward the left of the stair foot (0, 24): it reads from the stair and the
+	-- walkway, and its far end stays ~0.8 clear of the right pillar at (20, 17.5) beside the chest
 	local labelPos = (base * CFrame.new(0, 5.6, 0)).Position
-	label(model, labelPos, info.title, "free every day", info.color, Vector3.new(6, labelPos.Y, 24) - labelPos)
+	label(model, labelPos, info.title, "free every day", info.color, Vector3.new(0, labelPos.Y, 24) - labelPos)
 	return model
 end
 
