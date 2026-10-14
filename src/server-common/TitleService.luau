@@ -36,7 +36,9 @@ end
 
 -- Runs inside DataService's push (Changed). New titles go straight into the live profile so the
 -- next Changed can't unlock them twice; a deferred empty update then pushes them to the client.
-local function onChanged(player: Player, data: any)
+local function onChanged(player: Player, copy: any)
+	-- (BindableEvent:Fire hands handlers a copy of the table: unlock titles in the live profile)
+	local data = DataService.get(player) or copy
 	if not player.Parent then
 		return
 	end
